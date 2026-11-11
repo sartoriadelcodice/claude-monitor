@@ -1,12 +1,21 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 
 import { AudioService } from '../../core/audio.service';
 import { AuthService } from '../../core/auth.service';
-import { STATUS_META, Session, formatElapsed, formatModel, requiresAttention } from '../../core/models';
+import { I18n } from '../../core/i18n.service';
+import {
+  FocusResult,
+  STATUS_META,
+  Session,
+  formatElapsed,
+  formatModel,
+  requiresAttention,
+} from '../../core/models';
 import { PushService } from '../../core/push.service';
 import { SessionStore } from '../../core/session-store.service';
 import { GroupBy, SettingsService } from '../../core/settings.service';
@@ -17,19 +26,30 @@ import { Users } from '../users/users';
 
 interface SessionGroup {
   key: string;
-  /** null quando le card non sono raggruppate. */
+  /** null when the cards are not grouped. */
   label: string | null;
-  /** Sessioni del gruppo che richiedono attenzione e non sono ancora state viste. */
+  /** Sessions of the group that need attention and have not been seen yet. */
   attention: number;
   sessions: Session[];
 }
 
-type FocusState = 'sending' | 'ok' | 'error';
+/** Focus request in progress, or outcome of the last one with the machine where the session opened. */
+type FocusState = { status: 'sending' } | { status: 'ok'; result: FocusResult } | { status: 'error' };
 
-/** Vista principale: contatore delle sessioni in attesa e griglia di card. */
+/** Main view: counter of the sessions waiting for the user and grid of cards. */
 @Component({
   selector: 'app-dashboard',
-  imports: [FormsModule, ButtonModule, SelectModule, SelectButtonModule, SessionDetail, Settings, HookKeys, Users],
+  imports: [
+    FormsModule,
+    TranslocoPipe,
+    ButtonModule,
+    SelectModule,
+    SelectButtonModule,
+    SessionDetail,
+    Settings,
+    HookKeys,
+    Users,
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -39,13 +59,14 @@ export class Dashboard implements OnInit, OnDestroy {
   protected readonly push = inject(PushService);
   protected readonly auth = inject(AuthService);
   protected readonly settingsService = inject(SettingsService);
+  private readonly i18n = inject(I18n);
 
-  protected readonly groupOptions: { label: string; value: GroupBy }[] = [
-    { label: 'Nessuno', value: 'none' },
-    { label: 'Cartella', value: 'project' },
-    { label: 'Device', value: 'machine' },
-    { label: 'Entrambi', value: 'both' },
-  ];
+  protected readonly groupOptions = computed<{ label: string; value: GroupBy }[]>(() => [
+    { label: this.i18n.t('dashboard.groupNone'), value: 'none' },
+    { label: this.i18n.t('dashboard.groupProject'), value: 'project' },
+    { label: this.i18n.t('dashboard.groupMachine'), value: 'machine' },
+    { label: this.i18n.t('dashboard.groupBoth'), value: 'both' },
+  ]);
   protected readonly darkTheme = computed(() => this.settingsService.settings().theme === 'dark');
   protected readonly groupBy = computed(() => this.settingsService.settings().groupBy);
 
@@ -54,7 +75,7 @@ export class Dashboard implements OnInit, OnDestroy {
   protected readonly settingsOpen = signal(false);
   protected readonly hookKeysOpen = signal(false);
   protected readonly usersOpen = signal(false);
-  /** Esito dell'ultima richiesta di focus per sessione, mostrato per qualche secondo sul pulsante. */
+  /** Outcome of the last focus request per session, shown on the button for a few seconds. */
   protected readonly focusState = signal<ReadonlyMap<string, FocusState>>(new Map());
 
   protected readonly machines = computed(() =>
@@ -67,8 +88,8 @@ export class Dashboard implements OnInit, OnDestroy {
   });
 
   /**
-   * Card divise in gruppi secondo la scelta dell'utente. I gruppi con sessioni che richiedono
-   * attenzione vengono prima; dentro ogni gruppo vale l'ordinamento generale.
+   * Cards split into groups as chosen by the user. Groups with sessions that need attention come
+   * first; within each group the general ordering applies.
    */
   protected readonly groups = computed<SessionGroup[]>(() => {
     const sessions = this.visible();
@@ -94,7 +115,7 @@ export class Dashboard implements OnInit, OnDestroy {
         group.attention++;
       }
     }
-    // La prima sessione di ogni gruppo è la più urgente: decide la posizione del gruppo
+    // The first session of each group is the most urgent one: it decides the position of the group
     return [...byKey.values()].sort(
       (a, b) =>
         STATUS_META[a.sessions[0].status].order - STATUS_META[b.sessions[0].status].order ||
@@ -102,7 +123,7 @@ export class Dashboard implements OnInit, OnDestroy {
     );
   });
 
-  /** Sessione aperta nel dettaglio, sempre letta dallo store per restare aggiornata. */
+  /** Session open in the detail dialog, always read from the store to stay up to date. */
   protected readonly selected = computed(() => {
     const id = this.selectedId();
     return id ? (this.store.sessions().find((s) => s.id === id) ?? null) : null;
@@ -123,7 +144,7 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   protected setGroupBy(value: GroupBy | null): void {
-    // Il pulsante già selezionato, se ritoccato, restituisce null: si resta sul valore attuale
+    // Tapping the selected button again yields null: keep the current value
     if (value) {
       this.settingsService.update({ groupBy: value });
     }
@@ -134,22 +155,22 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   protected elapsed(session: Session): string {
-    return formatElapsed(session.statusSince, this.store.now());
+    return formatElapsed(session.statusSince, this.store.now(), (key, params) => this.i18n.t(key, params));
   }
 
-  /** Evidenziazione visiva: richiede attenzione e non è ancora stata vista. */
+  /** Visual highlight: the session needs attention and has not been seen yet. */
   protected highlighted(session: Session): boolean {
     return requiresAttention(session.status) && !session.seenAt;
   }
 
-  /** Ingrandimento temporaneo: finisce allo scadere del tempo o appena la sessione viene vista. */
+  /** Temporary enlargement: it ends when the time is up or as soon as the session is seen. */
   protected zoomed(session: Session): boolean {
     return this.store.zoomed().has(session.id) && this.highlighted(session);
   }
 
   /**
-   * Tocco sulla card. Se sta avvisando, il primo tocco la segna solo come vista: spegne evidenziazione
-   * e ripetizione del suono senza aprire nulla. Il dettaglio si apre toccando una card già vista.
+   * Tap on the card. While the card is alerting, the first tap only marks it as seen: it stops the highlight
+   * and the sound repetition without opening anything. Tapping a card already seen opens the detail.
    */
   protected open(session: Session): void {
     if (this.highlighted(session)) {
@@ -159,30 +180,51 @@ export class Dashboard implements OnInit, OnDestroy {
     this.selectedId.set(session.id);
   }
 
-  /** Il pulsante del focus compare solo se la macchina ha l'agente collegato e la sessione è ancora aperta. */
+  /**
+   * The focus button appears on open sessions whose machine has the agent connected, or on Remote Control
+   * sessions when another Mac with the agent has the Claude app.
+   */
   protected focusable(session: Session): boolean {
-    return !session.archived && session.status !== 'ENDED' && this.store.focusMachines().has(session.machine);
+    return (
+      !session.archived &&
+      session.status !== 'ENDED' &&
+      (this.store.focusMachines().has(session.machine) || this.claudeAppOnly(session))
+    );
+  }
+
+  /** The session can only be opened in the Claude app of another Mac: its own machine has no agent. */
+  private claudeAppOnly(session: Session): boolean {
+    return (
+      !this.store.focusMachines().has(session.machine) &&
+      !!session.remoteSessionId &&
+      [...this.store.claudeAppMachines()].some((machine) => machine !== session.machine)
+    );
   }
 
   /**
-   * Porta in primo piano, sulla macchina della sessione, la finestra che la ospita.
-   * Chi va alla finestra ha visto l'avviso: la card viene anche segnata come vista.
+   * Brings the session to the front on the Mac in use: its window, or the Claude app of another Mac when the
+   * session is under Remote Control. The server makes the choice.
+   * Whoever goes to the window has seen the alert: the card is also marked as seen.
    */
   protected async focus(session: Session): Promise<void> {
-    if (this.focusState().get(session.id) === 'sending') {
+    if (this.focusStatus(session) === 'sending') {
       return;
     }
-    this.setFocusState(session.id, 'sending');
+    this.setFocusState(session.id, { status: 'sending' });
     if (this.highlighted(session)) {
       void this.store.markSeen(session);
     }
-    const delivered = await this.store.focus(session);
-    this.setFocusState(session.id, delivered ? 'ok' : 'error');
-    setTimeout(() => this.setFocusState(session.id, null), 2_500);
+    const result = await this.store.focus(session);
+    this.setFocusState(session.id, result ? { status: 'ok', result } : { status: 'error' });
+    setTimeout(() => this.setFocusState(session.id, null), 3_000);
+  }
+
+  protected focusStatus(session: Session): FocusState['status'] | null {
+    return this.focusState().get(session.id)?.status ?? null;
   }
 
   protected focusIcon(session: Session): string {
-    switch (this.focusState().get(session.id)) {
+    switch (this.focusStatus(session)) {
       case 'sending':
         return 'pi pi-spin pi-spinner';
       case 'ok':
@@ -190,7 +232,24 @@ export class Dashboard implements OnInit, OnDestroy {
       case 'error':
         return 'pi pi-times';
       default:
-        return 'pi pi-window-maximize';
+        return this.claudeAppOnly(session) ? 'pi pi-external-link' : 'pi pi-window-maximize';
+    }
+  }
+
+  protected focusLabel(session: Session): string {
+    const state = this.focusState().get(session.id);
+    switch (state?.status) {
+      case 'sending':
+        return this.i18n.t('focus.sending');
+      case 'ok':
+        // Where the session ended up: with Remote Control it can be a Mac other than its own
+        return this.i18n.t(state.result.claudeApp ? 'focus.claudeAppOn' : 'focus.windowOn', {
+          machine: state.result.machine,
+        });
+      case 'error':
+        return this.i18n.t('focus.unreachable');
+      default:
+        return this.i18n.t(this.claudeAppOnly(session) ? 'focus.openInClaude' : 'focus.openWindow');
     }
   }
 

@@ -1,8 +1,8 @@
 package it.sartoriadelcodice.claudemonitor.user;
 
 public enum Role {
-    /** Vede le proprie sessioni e gestisce le proprie chiavi hook. */
+    /** Sees their own sessions and manages their own hook keys. */
     USER,
-    /** Come USER, più la gestione degli utenti. */
+    /** Like USER, plus user management. */
     ADMIN
 }

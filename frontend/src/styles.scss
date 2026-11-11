@@ -1,7 +1,7 @@
 @use 'primeicons/primeicons.css';
 
-// Tema chiaro. La classe "app-dark" su <html> attiva quello scuro, anche per PrimeNG
-// (darkModeSelector in app.config.ts); la imposta SettingsService secondo la scelta dell'utente.
+// Light theme. The "app-dark" class on <html> enables the dark one, PrimeNG included
+// (darkModeSelector in app.config.ts); SettingsService sets it according to the user's choice.
 :root {
   color-scheme: light;
   --cm-bg: #f3f5f9;
@@ -10,12 +10,14 @@
   --cm-border: #d5dbe6;
   --cm-text: #1a2233;
   --cm-muted: #5b6678;
-  // Colori di stato un po' più scuri che nel tema scuro, per restare leggibili sul bianco
+  // State colors slightly darker than in the dark theme, to stay readable on white
   --cm-red: #dc2626;
   --cm-orange: #ea580c;
   --cm-green: #16a34a;
   --cm-blue: #2563eb;
   --cm-gray: #6b7280;
+  // Text on buttons filled with the state color
+  --cm-on-status: #ffffff;
 }
 
 :root.app-dark {
@@ -31,11 +33,13 @@
   --cm-green: #22c55e;
   --cm-blue: #3b82f6;
   --cm-gray: #6b7280;
+  // In the dark theme the state colors are light: white text on them would be unreadable
+  --cm-on-status: #0b0f17;
 }
 
-// Nella PWA su iPadOS la barra di stato è trasparente con testo bianco (black-translucent, fissato
-// all'installazione): nel tema chiaro le si mette dietro una fascia scura, altrimenti ora e batteria
-// non si leggono.
+// In the iPadOS PWA the status bar is transparent with white text (black-translucent, fixed at
+// installation time): in the light theme a dark band goes behind it, otherwise time and battery
+// would be unreadable.
 :root:not(.app-dark) body::before {
   content: '';
   position: fixed;
@@ -46,9 +50,9 @@
   pointer-events: none;
 }
 
-// Il documento non scorre mai: scorre solo il contenuto dell'app (vedi dashboard.scss).
-// Su iPadOS, se la pagina è scorsa quando si apre una finestra modale, i tocchi finiscono
-// spostati rispetto a ciò che si vede.
+// The document never scrolls: only the app content does (see dashboard.scss).
+// On iPadOS, if the page is scrolled when a modal dialog opens, taps land offset
+// from what is on screen.
 html,
 body {
   margin: 0;
@@ -71,8 +75,8 @@ app-root {
   height: 100%;
 }
 
-// Sui dispositivi touch iPadOS genera l'evento click solo sugli elementi "cliccabili":
-// così un tocco in qualunque punto della pagina vale come gesto per sbloccare l'audio
+// On touch devices iPadOS fires click only on "clickable" elements: this way a tap
+// anywhere on the page counts as the gesture that unlocks audio
 @media (hover: none) {
   body {
     cursor: pointer;

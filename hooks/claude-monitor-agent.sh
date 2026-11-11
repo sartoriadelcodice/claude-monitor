@@ -1,55 +1,70 @@
 #!/bin/bash
-# Agente di Claude Monitor per macOS.
-# Resta collegato al backend e, quando dalla dashboard si chiede il focus di una sessione, porta in primo
-# piano la finestra che la ospita. La finestra è quella annotata da claude-monitor-hook.sh in
-# ~/.claude/claude-monitor/windows/<session_id>: dal backend arriva solo l'identificativo della sessione,
-# quindi il server non può far aprire nient'altro.
+# Claude Monitor agent for macOS.
+# Stays connected to the backend and, when the dashboard asks for the focus of a session, brings the window
+# hosting it to the front. The window is the one recorded by claude-monitor-hook.sh in
+# ~/.claude/claude-monitor/windows/<session_id>: the backend only sends the session id,
+# so the server cannot make it open anything else.
 #
-# Limiti voluti: l'agente non esegue comandi ricevuti dalla rete, non invia tasti e non usa i permessi di
-# Accessibilità. Sa solo selezionare una scheda di Terminale o iTerm e portare avanti un'applicazione.
-# Va attivato a mano su ogni Mac ("install"): l'installazione dell'hook non lo avvia.
 #
-# Protezioni contro un server difettoso o compromesso:
-#   - si collega solo in https (http è ammesso soltanto verso questa stessa macchina);
-#   - ogni richiesta anomala vale dei punti: identificativo malformato (blocco immediato), sessione che
-#     questo Mac non conosce, richieste troppo ravvicinate. Raggiunta la soglia in dieci minuti, o superato
-#     il numero massimo di focus in un'ora, l'agente si blocca: si scollega, avvisa con una notifica e non
-#     esegue più nulla finché sul Mac non si lancia "unlock". Il blocco non si toglie dalla rete.
-#   - l'interruttore nelle impostazioni della dashboard spegne il focus per tutte le macchine dell'utente:
-#     il backend scollega l'agente e ne rifiuta i nuovi collegamenti.
+# Remote Control (Claude Code Remote Control): if the session of another machine can be followed remotely,
+# the backend asks all agents how many seconds keyboard and mouse have been idle ("probe") and picks the
+# Mac used most recently. If it is not the session's Mac, its agent receives the Remote Control id
+# (session_...) and opens the session in the Claude app with the link claude://code/<id>.
+# The agent answers idle-time requests only with a number of seconds, and only when the backend asks.
 #
-# Uso:
-#   claude-monitor-agent.sh install     registra l'agente in launchd (parte subito e a ogni accesso)
-#   claude-monitor-agent.sh uninstall   lo ferma e lo rimuove
-#   claude-monitor-agent.sh run         resta in ascolto (è il comando eseguito da launchd)
-#   claude-monitor-agent.sh focus ID    porta in primo piano la finestra di una sessione, per prova
-#   claude-monitor-agent.sh status      dice se l'agente è registrato e se è bloccato
-#   claude-monitor-agent.sh unlock      toglie il blocco scattato per richieste anomale
+# Intended limits: the agent does not execute commands received from the network, does not send keystrokes and
+# does not use Accessibility permissions. It can only select a Terminal or iTerm tab, bring an application to
+# the front and open in the Claude app a link it builds itself from a checked id.
+# It must be enabled by hand on each Mac ("install"): installing the hook does not start it.
 #
-# URL, chiave hook e nome della macchina sono quelli dell'hook: variabili d'ambiente CLAUDE_MONITOR_URL,
-# CLAUDE_MONITOR_TOKEN e CLAUDE_MONITOR_MACHINE oppure, se mancano, la sezione "env" di ~/.claude/settings.json.
+# Protections against a faulty or compromised server:
+#   - it connects only over https (http is allowed only towards this same machine);
+#   - every anomalous request is worth some points: malformed id (immediate lock), session that
+#     this Mac does not know, remote session without the Claude app, requests too close together. When the
+#     threshold is reached within ten minutes, or the maximum number of focus or idle-time requests in an hour
+#     is exceeded, the agent locks itself: it disconnects, shows a notification and does nothing more until
+#     "unlock" is run on the Mac. The lock cannot be removed from the network.
+#   - the switch in the dashboard settings turns off focus for all the user's machines:
+#     the backend disconnects the agent and refuses its new connections.
+#
+# Usage:
+#   claude-monitor-agent.sh install     registers the agent in launchd (starts now and at every login)
+#   claude-monitor-agent.sh uninstall   stops and removes it
+#   claude-monitor-agent.sh run         keeps listening (the command run by launchd)
+#   claude-monitor-agent.sh focus ID    brings the window of a session to the front, for testing
+#   claude-monitor-agent.sh remote ID   opens a Remote Control session (session_...) in the Claude app, for testing
+#   claude-monitor-agent.sh idle        seconds since keyboard and mouse were last used, as the backend receives them
+#   claude-monitor-agent.sh status      tells whether the agent is registered and whether it is locked
+#   claude-monitor-agent.sh unlock      removes the lock triggered by anomalous requests
+#
+# URL, hook key and machine name are the same as the hook's: environment variables CLAUDE_MONITOR_URL,
+# CLAUDE_MONITOR_TOKEN and CLAUDE_MONITOR_MACHINE or, if missing, the "env" section of ~/.claude/settings.json.
 
 label="it.sartoriadelcodice.claude-monitor-agent"
 windows_dir="$HOME/.claude/claude-monitor/windows"
 settings_file="$HOME/.claude/settings.json"
 plist_file="$HOME/Library/LaunchAgents/$label.plist"
 log_file="$HOME/Library/Logs/claude-monitor-agent.log"
-# Presente quando l'agente si è bloccato per richieste anomale: si toglie solo da questo Mac
+# Present when the agent has locked itself because of anomalous requests: it can only be removed from this Mac
 lock_file="$HOME/.claude/claude-monitor/agent.locked"
+# Claude app for macOS: opens Remote Control sessions with claude:// links
+claude_bundle="com.anthropic.claudefordesktop"
 
-# Soglie delle protezioni
-suspect_limit=10       # punti di sospetto che fanno scattare il blocco
-suspect_window=600     # secondi entro cui i punti si sommano
-hourly_limit=60        # focus eseguiti in un'ora oltre i quali l'agente si blocca
-min_interval=2         # secondi minimi tra due focus
-suspects=()            # richieste sospette recenti, come "istante:punti"
-executed=()            # istanti dei focus eseguiti nell'ultima ora
+# Protection thresholds
+suspect_limit=10       # suspicion points that trigger the lock
+suspect_window=600     # seconds within which the points add up
+hourly_limit=60        # focus actions executed in an hour beyond which the agent locks itself
+probe_hourly_limit=120 # idle-time requests in an hour beyond which the agent locks itself
+min_interval=2         # minimum seconds between two focus actions
+suspects=()            # recent suspicious requests, as "time:points"
+executed=()            # times of the focus actions executed in the last hour
+probed=()              # times of the idle-time requests in the last hour
 
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
 }
 
-# Variabile d'ambiente oppure valore omonimo nella sezione "env" delle impostazioni di Claude Code
+# Environment variable or the value with the same name in the "env" section of the Claude Code settings
 setting() {
   local current
   eval "current=\"\${$1:-}\""
@@ -60,7 +75,7 @@ setting() {
   fi
 }
 
-# Scheda di Terminale con il terminale indicato: la seleziona e porta avanti la sua finestra
+# Terminal tab with the given tty: selects it and brings its window to the front
 focus_terminal() {
   osascript - "$1" 2>/dev/null <<'APPLESCRIPT'
 on run argv
@@ -111,15 +126,15 @@ end run
 APPLESCRIPT
 }
 
-# Blocca l'agente: da qui in poi non esegue nulla finché sul Mac non si lancia "unlock".
-# Il motivo è sempre un testo fisso di questo script, mai un dato arrivato dalla rete.
+# Locks the agent: from now on it does nothing until "unlock" is run on the Mac.
+# The reason is always a fixed text of this script, never data received from the network.
 lock_agent() {
   (umask 077 && mkdir -p "${lock_file%/*}" && printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >"$lock_file")
-  log "AGENTE BLOCCATO: $1. Per riattivarlo: bash $0 unlock"
-  osascript -e 'display notification "Richieste anomale dal server: il focus delle finestre è stato sospeso su questo Mac." with title "Claude Monitor"' >/dev/null 2>&1
+  log "AGENT LOCKED: $1. To re-enable it: bash $0 unlock"
+  osascript -e 'display notification "Anomalous requests from the server: window focus has been suspended on this Mac." with title "Claude Monitor"' >/dev/null 2>&1
 }
 
-# Registra una richiesta sospetta (punti, motivo) e blocca l'agente se nella finestra di tempo si supera la soglia
+# Records a suspicious request (points, reason) and locks the agent if the threshold is exceeded within the time window
 suspect() {
   local now cutoff entry total=0 kept=()
   now="$(date +%s)"
@@ -132,13 +147,13 @@ suspect() {
     fi
   done
   suspects=("${kept[@]}")
-  log "richiesta sospetta: $2 (punti $total su $suspect_limit)"
+  log "suspicious request: $2 ($total of $suspect_limit points)"
   if [ "$total" -ge "$suspect_limit" ]; then
-    lock_agent "troppe richieste anomale ($2)"
+    lock_agent "too many anomalous requests ($2)"
   fi
 }
 
-# Conta i focus eseguiti nell'ultima ora: un volume che nessuno produce a mano fa scattare il blocco
+# Counts the focus actions executed in the last hour: a volume nobody produces by hand triggers the lock
 count_executed() {
   local now cutoff entry kept=()
   now="$(date +%s)"
@@ -151,29 +166,122 @@ count_executed() {
   done
   executed=("${kept[@]}")
   if [ "${#executed[@]}" -gt "$hourly_limit" ]; then
-    lock_agent "più di $hourly_limit focus in un'ora"
+    lock_agent "more than $hourly_limit focus actions in an hour"
   fi
 }
 
-# Porta in primo piano la finestra della sessione. I valori letti dal file sono ricontrollati prima dell'uso.
-# Esce con 2 se l'identificativo è malformato e con 3 se questo Mac non conosce la sessione.
-focus_session() {
-  local id="$1" file app tty folder
-  # Gli identificativi di Claude Code sono brevi e senza caratteri speciali: altro non arriva da un server sano.
-  # Il valore non si scrive nel registro, per non farci finire testo scelto da chi lo ha inviato.
-  case "$id" in '' | *[!A-Za-z0-9_-]*)
-    log "identificativo di sessione malformato (${#id} caratteri)"
+# Counts the idle-time requests of the last hour. The backend sends one per tap on "Open window":
+# beyond the threshold someone is watching how the Mac is used, and the agent locks itself.
+# Returns 1 if the request arrives less than a second after the previous one or if the lock was triggered.
+count_probe() {
+  local now cutoff entry kept=() last=0
+  now="$(date +%s)"
+  cutoff=$((now - 3600))
+  [ "${#probed[@]}" -gt 0 ] && last="${probed[${#probed[@]}-1]}"
+  probed+=("$now")
+  for entry in "${probed[@]}"; do
+    if [ "$entry" -ge "$cutoff" ]; then
+      kept+=("$entry")
+    fi
+  done
+  probed=("${kept[@]}")
+  if [ "${#probed[@]}" -gt "$probe_hourly_limit" ]; then
+    lock_agent "more than $probe_hourly_limit idle-time requests in an hour"
+    return 1
+  fi
+  if [ $((now - last)) -lt 1 ]; then
+    suspect 1 "idle-time requests too close together"
+    return 1
+  fi
+}
+
+# Seconds since the keyboard, mouse or trackpad of this Mac were last used
+idle_seconds() {
+  ioreg -c IOHIDSystem -d 4 -r -k HIDIdleTime 2>/dev/null |
+    awk '/"HIDIdleTime"/ { printf "%d\n", $NF / 1000000000; exit }'
+}
+
+# Claude app installed: only then can the agent open Remote Control sessions
+claude_app_installed() {
+  local app
+  for app in /Applications/Claude.app "$HOME/Applications/Claude.app"; do
+    if [ "$(plutil -extract CFBundleIdentifier raw -o - "$app/Contents/Info.plist" 2>/dev/null)" = "$claude_bundle" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Answers a backend request with the idle seconds of this Mac: it sends nothing else.
+# Returns 2 if the request id is malformed.
+answer_probe() {
+  local probe="$1" url="$2" token="$3" machine="$4" idle
+  # The backend generates 32 hex digits: nothing else comes from a healthy server
+  case "$probe" in '' | *[!0-9a-f]*) return 2 ;; esac
+  [ "${#probe}" -eq 32 ] || return 2
+  idle="$(idle_seconds)"
+  case "$idle" in '' | *[!0-9]*)
+    log "idle time not available"
+    return 0
+    ;;
+  esac
+  # The key goes through stdin and not the command line, where other processes would see it
+  curl --config - --silent --max-time 5 --request POST \
+    --data-urlencode "probe=$probe" --data-urlencode "machine=$machine" --data-urlencode "idle=$idle" \
+    "${url%/}/api/agent/activity" >/dev/null 2>&1 <<EOF
+header = "Authorization: Bearer $token"
+EOF
+  return 0
+}
+
+# Opens in the Claude app the Remote Control session of another machine. The agent builds the link itself:
+# the backend only sends the id, which is checked before use.
+# Returns 2 if the id is malformed and 3 if the Claude app is not on this Mac.
+open_remote() {
+  local id="$1"
+  # Format of Claude Code ids: session_ or cse_ followed by letters, digits, "_" and "-".
+  # An invalid value is not written to the log, so that no text chosen by the sender ends up there.
+  case "$id" in session_?* | cse_?*) ;; *)
+    log "malformed remote session id (${#id} characters)"
+    return 2
+    ;;
+  esac
+  case "${id#*_}" in *[!A-Za-z0-9_-]*)
+    log "malformed remote session id (${#id} characters)"
     return 2
     ;;
   esac
   if [ "${#id}" -gt 100 ]; then
-    log "identificativo di sessione troppo lungo (${#id} caratteri)"
+    log "remote session id too long (${#id} characters)"
+    return 2
+  fi
+  if ! claude_app_installed; then
+    log "remote session $id: Claude app not installed on this Mac"
+    return 3
+  fi
+  log "remote session $id: Claude app"
+  open -b "$claude_bundle" "claude://code/$id"
+}
+
+# Brings the window of the session to the front. The values read from the file are checked again before use.
+# Returns 2 if the id is malformed and 3 if this Mac does not know the session.
+focus_session() {
+  local id="$1" file app tty folder
+  # Claude Code ids are short and have no special characters: nothing else comes from a healthy server.
+  # The value is not written to the log, so that no text chosen by the sender ends up there.
+  case "$id" in '' | *[!A-Za-z0-9_-]*)
+    log "malformed session id (${#id} characters)"
+    return 2
+    ;;
+  esac
+  if [ "${#id}" -gt 100 ]; then
+    log "session id too long (${#id} characters)"
     return 2
   fi
   file="$windows_dir/$id"
-  # Solo un file vero e di questo utente: niente collegamenti simbolici verso altri file
+  # Only a regular file owned by this user: no symbolic links to other files
   if [ ! -f "$file" ] || [ -L "$file" ] || [ ! -O "$file" ]; then
-    log "sessione $id: finestra sconosciuta su questo Mac"
+    log "session $id: unknown window on this Mac"
     return 3
   fi
   {
@@ -182,7 +290,7 @@ focus_session() {
     IFS= read -r folder
   } <"$file"
   case "$app" in *[!A-Za-z0-9.-]* | -*) app="" ;; esac
-  # La cartella finisce tra gli argomenti di "open": solo percorsi assoluti, mai qualcosa che sembri un'opzione
+  # The folder ends up among the arguments of "open": only absolute paths, never anything that looks like an option
   case "$folder" in /*) ;; *) folder="" ;; esac
   case "$tty" in
     /dev/ttys[0-9]*) case "${tty#/dev/ttys}" in *[!0-9]*) tty="" ;; esac ;;
@@ -193,40 +301,40 @@ focus_session() {
     case "$app" in
       com.apple.Terminal)
         if [ "$(focus_terminal "$tty")" = "ok" ]; then
-          log "sessione $id: scheda di Terminale $tty"
+          log "session $id: Terminal tab $tty"
           return 0
         fi
         ;;
       com.googlecode.iterm2)
         if [ "$(focus_iterm "$tty")" = "ok" ]; then
-          log "sessione $id: scheda di iTerm $tty"
+          log "session $id: iTerm tab $tty"
           return 0
         fi
         ;;
     esac
   fi
   if [ -z "$app" ]; then
-    log "sessione $id: applicazione sconosciuta"
+    log "session $id: unknown application"
     return 3
   fi
   case "$app" in
     com.microsoft.VSCode* | com.vscodium* | com.todesktop.230313mzl4w4u92)
-      # VS Code e derivati: aprire la cartella porta avanti la finestra che l'ha già aperta
+      # VS Code and derivatives: opening the folder brings forward the window that already has it open
       if [ -n "$folder" ] && [ -d "$folder" ]; then
-        log "sessione $id: finestra di $app con la cartella del progetto"
+        log "session $id: $app window with the project folder"
         open -b "$app" "$folder"
         return
       fi
       ;;
   esac
-  # Scheda non trovata o applicazione senza supporto specifico: si porta avanti l'applicazione
-  log "sessione $id: applicazione $app"
+  # Tab not found or application without specific support: the application is brought to the front
+  log "session $id: application $app"
   open -b "$app"
 }
 
 install_agent() {
   if [ "$(uname -s)" != "Darwin" ]; then
-    echo "L'agente per il focus delle finestre serve solo su macOS: niente da installare."
+    echo "The window focus agent is only needed on macOS: nothing to install."
     return 0
   fi
   local script domain escaped
@@ -260,7 +368,7 @@ install_agent() {
 </dict>
 </plist>
 EOF
-  # Se era già registrato si ferma e si aspetta che launchd lo abbia tolto davvero
+  # If it was already registered, stop it and wait until launchd has really removed it
   if launchctl bootout "$domain/$label" 2>/dev/null; then
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       launchctl print "$domain/$label" >/dev/null 2>&1 || break
@@ -268,10 +376,10 @@ EOF
     done
   fi
   if launchctl bootstrap "$domain" "$plist_file"; then
-    echo "Agente per il focus delle finestre attivo (registro: $log_file)."
-    echo "Al primo utilizzo macOS chiede di consentire il controllo di Terminale: va accettato."
+    echo "Window focus agent active (log: $log_file)."
+    echo "On first use macOS asks to allow control of Terminal: accept it."
   else
-    echo "Errore: launchd non ha avviato l'agente ($plist_file)." >&2
+    echo "Error: launchd did not start the agent ($plist_file)." >&2
     return 1
   fi
 }
@@ -279,35 +387,35 @@ EOF
 uninstall_agent() {
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null
   rm -f "$plist_file"
-  echo "Agente rimosso."
+  echo "Agent removed."
 }
 
 agent_status() {
   if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
-    echo "Agente registrato in launchd."
+    echo "Agent registered in launchd."
   else
-    echo "Agente non registrato in launchd."
+    echo "Agent not registered in launchd."
   fi
   if [ -e "$lock_file" ]; then
-    echo "BLOCCATO per richieste anomale: $(cat "$lock_file" 2>/dev/null)"
-    echo "Controlla $log_file e, se è tutto a posto, riattivalo con: bash $0 unlock"
+    echo "LOCKED because of anomalous requests: $(cat "$lock_file" 2>/dev/null)"
+    echo "Check $log_file and, if everything is fine, re-enable it with: bash $0 unlock"
   else
-    echo "Nessun blocco attivo."
+    echo "No active lock."
   fi
 }
 
 unlock_agent() {
   if [ -e "$lock_file" ]; then
     rm -f "$lock_file"
-    echo "Blocco tolto: l'agente si ricollega entro mezzo minuto."
+    echo "Lock removed: the agent reconnects within half a minute."
   else
-    echo "Nessun blocco attivo."
+    echo "No active lock."
   fi
 }
 
 run_agent() {
   local fifo_dir fifo curl_pid="" url token machine line event data connected delay=2 now last_focus=0
-  local locked_logged=0 refused_logged=0
+  local locked_logged=0 refused_logged=0 claude_app
   fifo_dir="$(mktemp -d "${TMPDIR:-/tmp}/claude-monitor-agent.XXXXXX")" || exit 1
   fifo="$fifo_dir/stream"
   mkfifo "$fifo" || exit 1
@@ -315,11 +423,11 @@ run_agent() {
   trap 'exit 0' TERM INT HUP
 
   while true; do
-    # Bloccato: nessun collegamento finché il file non viene tolto con "unlock"
+    # Locked: no connection until the file is removed with "unlock"
     if [ -e "$lock_file" ]; then
       if [ "$locked_logged" = 0 ]; then
         locked_logged=1
-        log "agente bloccato: nessun collegamento finché non si lancia \"bash $0 unlock\""
+        log "agent locked: no connection until \"bash $0 unlock\" is run"
       fi
       sleep 30
       continue
@@ -328,34 +436,41 @@ run_agent() {
       locked_logged=0
       suspects=()
       executed=()
-      log "blocco tolto: l'agente riprende"
+      log "lock removed: the agent resumes"
     fi
     url="$(setting CLAUDE_MONITOR_URL)"
     token="$(setting CLAUDE_MONITOR_TOKEN)"
     machine="$(setting CLAUDE_MONITOR_MACHINE)"
-    machine="${machine:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo sconosciuta)}"
-    # Le impostazioni si rileggono a ogni tentativo: una chiave nuova vale senza riavviare l'agente
+    machine="${machine:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
+    # The settings are read again on every attempt: a new key takes effect without restarting the agent
     case "$url$token" in *'"'* | *'\'*) url="" ;; esac
     if [ -z "$url" ] || [ -z "$token" ]; then
-      log "CLAUDE_MONITOR_URL o CLAUDE_MONITOR_TOKEN mancanti in $settings_file: nuovo tentativo tra un minuto"
+      log "CLAUDE_MONITOR_URL or CLAUDE_MONITOR_TOKEN missing in $settings_file: retrying in a minute"
       sleep 60
       continue
     fi
-    # Senza https chiunque sulla rete potrebbe fingersi il server e leggere la chiave
+    # Without https anyone on the network could pretend to be the server and read the key
     case "$url" in
       https://* | http://127.0.0.1 | http://127.0.0.1[:/]* | http://localhost | http://localhost[:/]*) ;;
       *)
-        log "indirizzo rifiutato: l'agente si collega solo in https. Nuovo tentativo tra un minuto"
+        log "address refused: the agent only connects over https. Retrying in a minute"
         sleep 60
         continue
         ;;
     esac
-    # Le sessioni chiuse male lasciano il file della finestra: si eliminano quelli vecchi
+    # Sessions that were not closed cleanly leave their window file behind: the old ones are deleted
     find "$windows_dir" -type f -mtime +30 -delete 2>/dev/null
+    # With the Claude app the backend can send here the Remote Control sessions of the other machines
+    if claude_app_installed; then
+      claude_app=true
+    else
+      claude_app=false
+    fi
 
-    # La chiave passa da stdin e non dalla riga di comando, dove la vedrebbero gli altri processi
+    # The key goes through stdin and not the command line, where other processes would see it
     curl --config - --silent --fail --no-buffer --connect-timeout 10 \
-      --get --data-urlencode "machine=$machine" "${url%/}/api/agent/stream" >"$fifo" 2>/dev/null <<EOF &
+      --get --data-urlencode "machine=$machine" --data-urlencode "claudeApp=$claude_app" \
+      "${url%/}/api/agent/stream" >"$fifo" 2>/dev/null <<EOF &
 header = "Authorization: Bearer $token"
 header = "Accept: text/event-stream"
 EOF
@@ -363,14 +478,14 @@ EOF
 
     event=""
     connected=0
-    # Il backend manda un segnale ogni 20 secondi: un minuto di silenzio vuol dire connessione morta
+    # The backend sends a heartbeat every 20 seconds: a minute of silence means the connection is dead
     while IFS= read -r -t 60 line; do
       line="${line%$'\r'}"
       if [ "$connected" = 0 ]; then
         connected=1
         delay=2
         refused_logged=0
-        log "collegato a $url come $machine"
+        log "connected to $url as $machine (Claude app: $claude_app)"
       fi
       case "$line" in
         event:*)
@@ -380,25 +495,34 @@ EOF
         data:*)
           data="${line#data:}"
           data="${data# }"
-          if [ "$event" = "focus" ]; then
+          if [ "$event" = "focus" ] || [ "$event" = "remote" ]; then
             now="$(date +%s)"
             if [ $((now - last_focus)) -lt "$min_interval" ]; then
-              # Un server sano non manda richieste a raffica: la dashboard ne invia una per tocco
-              suspect 1 "richieste troppo ravvicinate"
+              # A healthy server does not send bursts of requests: the dashboard sends one per tap
+              suspect 1 "requests too close together"
             else
               last_focus="$now"
-              focus_session "$data"
+              if [ "$event" = "focus" ]; then
+                focus_session "$data"
+              else
+                open_remote "$data"
+              fi
               case "$?" in
                 0) count_executed ;;
-                2) suspect "$suspect_limit" "identificativo malformato" ;;
-                3) suspect 1 "sessione sconosciuta su questo Mac" ;;
+                2) suspect "$suspect_limit" "malformed id" ;;
+                3) suspect 1 "session unknown on this Mac or Claude app missing" ;;
               esac
             fi
+          elif [ "$event" = "probe" ]; then
+            if count_probe; then
+              answer_probe "$data" "$url" "$token" "$machine" ||
+                suspect "$suspect_limit" "malformed request id"
+            fi
           elif [ "$event" = "disabled" ]; then
-            log "focus disattivato dalle impostazioni della dashboard"
+            log "focus disabled from the dashboard settings"
             delay=60
           fi
-          # Scattato il blocco si chiude subito il collegamento
+          # Once the lock has been triggered the connection is closed right away
           if [ -e "$lock_file" ]; then
             break
           fi
@@ -410,10 +534,10 @@ EOF
     wait "$curl_pid" 2>/dev/null
     curl_pid=""
     if [ "$connected" = 1 ]; then
-      log "connessione chiusa"
+      log "connection closed"
     elif [ "$refused_logged" = 0 ] && [ ! -e "$lock_file" ]; then
       refused_logged=1
-      log "collegamento non riuscito: server non raggiungibile, chiave non valida o focus disattivato"
+      log "connection failed: server unreachable, invalid key or focus disabled"
     fi
     sleep "$delay"
     delay=$((delay * 2 > 60 ? 60 : delay * 2))
@@ -425,10 +549,12 @@ case "${1:-run}" in
   uninstall) uninstall_agent ;;
   run) run_agent ;;
   focus) focus_session "${2:-}" ;;
+  remote) open_remote "${2:-}" ;;
+  idle) idle_seconds ;;
   status) agent_status ;;
   unlock) unlock_agent ;;
   *)
-    echo "Uso: $0 install | uninstall | run | focus <session_id> | status | unlock" >&2
+    echo "Usage: $0 install | uninstall | run | focus <session_id> | remote <session_...> | idle | status | unlock" >&2
     exit 2
     ;;
 esac

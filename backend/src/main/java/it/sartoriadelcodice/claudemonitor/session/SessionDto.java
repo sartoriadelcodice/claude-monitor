@@ -2,7 +2,7 @@ package it.sartoriadelcodice.claudemonitor.session;
 
 import java.time.Instant;
 
-/** Rappresentazione di una sessione esposta al frontend (REST e SSE). */
+/** Representation of a session exposed to the frontend (REST and SSE). */
 public record SessionDto(
         String id,
         String machine,
@@ -17,12 +17,13 @@ public record SessionDto(
         String lastNotificationType,
         Instant seenAt,
         boolean archived,
-        Instant createdAt) {
+        Instant createdAt,
+        String remoteSessionId) {
 
     public static SessionDto from(Session s) {
         return new SessionDto(s.getId(), s.getMachine(), s.getProject(), s.getCwd(), s.getTitle(), s.getModel(),
                 s.getStatus(),
                 s.getStatusSince(), s.getLastEventAt(), s.getLastNotificationMessage(), s.getLastNotificationType(),
-                s.getSeenAt(), s.isArchived(), s.getCreatedAt());
+                s.getSeenAt(), s.isArchived(), s.getCreatedAt(), s.getRemoteSessionId());
     }
 }

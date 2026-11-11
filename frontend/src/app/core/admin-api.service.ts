@@ -13,7 +13,7 @@ export interface HookKey {
   revokedAt: string | null;
 }
 
-/** Risposta alla creazione: l'unico momento in cui la chiave in chiaro è disponibile. */
+/** Response to creation: the only moment the key is available in clear text. */
 export interface CreatedHookKey {
   id: number;
   name: string;
@@ -30,7 +30,7 @@ export interface UserAccount {
   createdAt: string;
 }
 
-/** Chiamate per le chiavi hook dell'utente e, per gli amministratori, per gli utenti. */
+/** Calls for the user's hook keys and, for administrators, for the users. */
 @Injectable({ providedIn: 'root' })
 export class AdminApi {
   private readonly http = inject(HttpClient);

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 
-/** Test della lettura del payload inviato dagli hook. */
+/** Tests for parsing the payload sent by the hooks. */
 class HookEventTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -35,20 +35,20 @@ class HookEventTest {
     @Test
     void stopWithEmptyOrMissingArraysHasNoBackgroundWork() throws Exception {
         assertThat(parse(",\"background_tasks\":[],\"session_crons\":[]").backgroundWork()).isFalse();
-        // Versioni di Claude Code che non inviano i due campi
+        // Claude Code versions that do not send the two fields
         assertThat(parse("").backgroundWork()).isFalse();
     }
 
     @Test
     void storedPayloadDropsConversationContent() throws Exception {
-        HookEvent event = parse(",\"last_assistant_message\":\"testo riservato\",\"prompt\":\"domanda riservata\","
-                + "\"tool_input\":{\"command\":\"comando riservato\"},"
+        HookEvent event = parse(",\"last_assistant_message\":\"private text\",\"prompt\":\"private question\","
+                + "\"tool_input\":{\"command\":\"private command\"},"
                 + "\"background_tasks\":[{\"id\":\"t1\",\"type\":\"shell\",\"status\":\"running\","
-                + "\"command\":\"comando riservato\",\"description\":\"descrizione riservata\"}],"
-                + "\"session_crons\":[{\"id\":\"c1\",\"schedule\":\"* * * * *\",\"prompt\":\"prompt riservato\"}]");
-        assertThat(event.rawPayload()).doesNotContain("riservat");
+                + "\"command\":\"private command\",\"description\":\"private description\"}],"
+                + "\"session_crons\":[{\"id\":\"c1\",\"schedule\":\"* * * * *\",\"prompt\":\"private prompt\"}]");
+        assertThat(event.rawPayload()).doesNotContain("private");
         assertThat(event.rawPayload()).contains("\"t1\"", "\"shell\"", "\"c1\"");
-        // Lo stato si ricava comunque dal payload originale
+        // The status is still derived from the original payload
         assertThat(event.backgroundWork()).isTrue();
     }
 
@@ -64,6 +64,19 @@ class HookEventTest {
         JsonNode node = JSON.createObjectNode().put("session_id", "s".repeat(101)).put("hook_event_name", "Stop");
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> HookEvent.fromJson(node))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void remoteSessionIdIsAcceptedOnlyInClaudeCodeForm() throws Exception {
+        assertThat(parse(",\"remote_session_id\":\"session_01AbCdEfGhIjKlMnOpQrStUv\"").remoteSessionId())
+                .isEqualTo("session_01AbCdEfGhIjKlMnOpQrStUv");
+        assertThat(parse(",\"remote_session_id\":\"cse_01AbCdEfGh\"").remoteSessionId()).isEqualTo("cse_01AbCdEfGh");
+        assertThat(parse("").remoteSessionId()).isNull();
+        // It ends up in a link opened by another machine: no paths, parameters or other schemes
+        assertThat(parse(",\"remote_session_id\":\"session_1/../../x\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"session_1?q=x\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"https://example.com\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"session_" + "a".repeat(81) + "\"").remoteSessionId()).isNull();
     }
 
     @Test

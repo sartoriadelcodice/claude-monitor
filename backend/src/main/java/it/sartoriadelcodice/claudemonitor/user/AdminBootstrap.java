@@ -17,8 +17,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * All'avvio: crea l'amministratore iniziale se non esistono utenti e gli assegna
- * i dati precedenti alla gestione multiutente (sessioni, subscription push, HOOK_TOKEN).
+ * At startup: creates the initial administrator if no users exist and assigns them
+ * the data that predates multi-user support (sessions, push subscriptions, HOOK_TOKEN).
  */
 @Component
 public class AdminBootstrap implements ApplicationRunner {
@@ -51,16 +51,16 @@ public class AdminBootstrap implements ApplicationRunner {
         var auth = properties.auth();
         if (users.count() == 0) {
             if (auth.password() == null || auth.password().isBlank()) {
-                log.warn("Nessun utente e ADMIN_PASSWORD non impostata: impossibile creare l'amministratore iniziale");
+                log.warn("No users and ADMIN_PASSWORD not set: unable to create the initial administrator");
                 return;
             }
             users.save(new User(auth.username(), passwordEncoder.encode(auth.password()), Role.ADMIN,
                     clock.instant()));
-            log.info("Creato l'amministratore iniziale '{}'", auth.username());
+            log.info("Created the initial administrator '{}'", auth.username());
         }
 
-        // Le credenziali nelle variabili d'ambiente valgono solo per la prima creazione:
-        // dopo, l'amministratore iniziale si riconosce dal nome utente
+        // The credentials in the environment variables only apply to the first creation:
+        // afterwards, the initial administrator is recognized by the username
         Optional<User> admin = users.findByUsernameIgnoreCase(auth.username())
                 .filter(u -> u.getRole() == Role.ADMIN);
         if (admin.isEmpty()) {
@@ -70,14 +70,14 @@ public class AdminBootstrap implements ApplicationRunner {
         int adoptedSessions = sessions.assignOrphansTo(adminId);
         int adoptedSubscriptions = pushSubscriptions.assignOrphansTo(adminId);
         if (adoptedSessions + adoptedSubscriptions > 0) {
-            log.info("Assegnati a '{}': {} sessioni e {} dispositivi push senza proprietario",
+            log.info("Assigned to '{}': {} sessions and {} push devices without an owner",
                     auth.username(), adoptedSessions, adoptedSubscriptions);
         }
-        // Il vecchio token condiviso diventa una normale chiave hook dell'amministratore, revocabile
+        // The old shared token becomes a regular, revocable hook key of the administrator
         String legacyToken = properties.hookToken();
         if (legacyToken != null && !legacyToken.isBlank()
                 && hookKeys.importLegacyKey(adminId, legacyToken.trim(), "HOOK_TOKEN (.env)")) {
-            log.info("HOOK_TOKEN importato come chiave hook di '{}'", auth.username());
+            log.info("HOOK_TOKEN imported as a hook key of '{}'", auth.username());
         }
     }
 }

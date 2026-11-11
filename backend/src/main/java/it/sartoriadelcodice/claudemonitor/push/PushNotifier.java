@@ -2,6 +2,9 @@ package it.sartoriadelcodice.claudemonitor.push;
 
 import java.security.GeneralSecurityException;
 import java.security.Security;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,29 +19,41 @@ import nl.martijndwars.webpush.PushService;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.MessageSource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-/** Invio delle notifiche Web Push (VAPID) quando una sessione richiede attenzione. */
+/** Sends Web Push (VAPID) notifications when a session needs attention. */
 @Service
 public class PushNotifier {
 
     private static final Logger log = LoggerFactory.getLogger(PushNotifier.class);
 
+    /** Languages of the notifications: the first one is the default. Texts in messages*.properties. */
+    public static final List<String> LANGUAGES = List.of("en", "it");
+
     private final PushSubscriptionRepository subscriptions;
     private final ObjectMapper objectMapper;
+    private final MessageSource messages;
     private final PushService pushService;
 
-    public PushNotifier(PushSubscriptionRepository subscriptions, ObjectMapper objectMapper,
+    public PushNotifier(PushSubscriptionRepository subscriptions, ObjectMapper objectMapper, MessageSource messages,
                         MonitorProperties properties) {
         this.subscriptions = subscriptions;
         this.objectMapper = objectMapper;
+        this.messages = messages;
         this.pushService = createPushService(properties.push());
+    }
+
+    /** The requested language if notifications support it, otherwise the default one. */
+    public static String supportedLanguage(String language) {
+        String normalized = language == null ? "" : language.trim().toLowerCase(Locale.ROOT);
+        return LANGUAGES.contains(normalized) ? normalized : LANGUAGES.getFirst();
     }
 
     private static PushService createPushService(MonitorProperties.Push push) {
         if (!push.enabled()) {
-            log.warn("Chiavi VAPID non configurate: notifiche push disattivate");
+            log.warn("VAPID keys not configured: push notifications disabled");
             return null;
         }
         try {
@@ -47,42 +62,52 @@ public class PushNotifier {
             }
             return new PushService(push.vapidPublicKey(), push.vapidPrivateKey(), push.vapidSubject());
         } catch (GeneralSecurityException | RuntimeException e) {
-            log.error("Chiavi VAPID non valide: notifiche push disattivate", e);
+            log.error("Invalid VAPID keys: push notifications disabled", e);
             return null;
         }
     }
 
-    /** Invia la notifica ai dispositivi del proprietario. Asincrono: non rallenta la ricezione degli eventi. */
+    /** Sends the notification to the owner's devices. Asynchronous: it does not slow down event reception. */
     @Async
     public void notifyAttention(Long userId, SessionDto session) {
         if (pushService == null) {
             return;
         }
-        String payload;
-        try {
-            payload = objectMapper.writeValueAsString(buildPayload(session));
-        } catch (JsonProcessingException e) {
-            log.error("Impossibile serializzare la notifica push", e);
-            return;
-        }
+        // Each device gets the notification in its own language: one payload per language
+        Map<String, String> payloads = new HashMap<>();
         for (PushSubscription subscription : subscriptions.findByUserId(userId)) {
-            send(subscription, payload);
+            String language = supportedLanguage(subscription.getLanguage());
+            String payload = payloads.computeIfAbsent(language, l -> serialize(session, l));
+            if (payload != null) {
+                send(subscription, payload);
+            }
         }
     }
 
-    /** Payload nel formato atteso dal service worker di Angular (chiave "notification"). */
-    static Map<String, Object> buildPayload(SessionDto session) {
+    private String serialize(SessionDto session, String language) {
+        try {
+            return objectMapper.writeValueAsString(buildPayload(session, messages, Locale.forLanguageTag(language)));
+        } catch (JsonProcessingException e) {
+            log.error("Unable to serialize the push notification", e);
+            return null;
+        }
+    }
+
+    /** Payload in the format expected by the Angular service worker ("notification" key). */
+    static Map<String, Object> buildPayload(SessionDto session, MessageSource messages, Locale locale) {
         boolean needsAttention = session.status() == SessionStatus.NEEDS_ATTENTION;
-        String title = (needsAttention ? "Richiede attenzione · " : "Risposta terminata · ") + session.project();
+        String title = messages.getMessage(needsAttention ? "push.title.attention" : "push.title.waiting",
+                new Object[] {session.project()}, locale);
+        // The message of a permission request comes from Claude Code and is shown as it is
         String detail = needsAttention && session.lastNotificationMessage() != null
                 ? session.lastNotificationMessage()
-                : (needsAttention ? "Permesso o input richiesto" : "Claude ha finito, tocca a te");
+                : messages.getMessage(needsAttention ? "push.body.attention" : "push.body.waiting", null, locale);
         return Map.of("notification", Map.of(
                 "title", title,
-                "body", detail + " (" + session.machine() + ")",
+                "body", messages.getMessage("push.body.machine", new Object[] {detail, session.machine()}, locale),
                 "icon", "icons/icon-192x192.png",
                 "badge", "icons/icon-96x96.png",
-                // Stesso tag per sessione: una nuova notifica sostituisce la precedente
+                // Same tag per session: a new notification replaces the previous one
                 "tag", session.id(),
                 "renotify", true,
                 "data", Map.of(
@@ -98,16 +123,16 @@ public class PushNotifier {
             var response = pushService.send(notification, Encoding.AES128GCM);
             int status = response.getStatusLine().getStatusCode();
             if (status == 404 || status == 410) {
-                // Subscription scaduta o revocata dal dispositivo
+                // Subscription expired or revoked by the device
                 subscriptions.deleteById(subscription.getId());
             } else if (status >= 400) {
-                log.warn("Invio push fallito con stato {}", status);
+                log.warn("Push delivery failed with status {}", status);
             }
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.warn("Invio push fallito: {}", e.getMessage());
+            log.warn("Push delivery failed: {}", e.getMessage());
         }
     }
 }

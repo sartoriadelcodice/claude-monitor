@@ -1,22 +1,22 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 
-/** Ogni quanto si chiede al server se c'è una versione nuova. */
+/** How often the server is asked for a new version. */
 const CHECK_INTERVAL_MS = 5 * 60_000;
 
 /**
- * Aggiornamento automatico della PWA: quando il service worker ha scaricato una nuova versione
- * la si attiva e si ricarica la pagina, senza aspettare che l'utente chiuda e riapra l'app.
+ * Automatic PWA update: when the service worker has downloaded a new version, it is activated
+ * and the page reloads, without waiting for the user to close and reopen the app.
  */
 @Injectable({ providedIn: 'root' })
 export class UpdateService {
   private readonly swUpdate = inject(SwUpdate);
   private started = false;
 
-  /** false con ng serve o nei browser senza service worker. */
+  /** false with ng serve or in browsers without service workers. */
   readonly enabled = this.swUpdate.isEnabled;
   readonly checking = signal(false);
-  /** Esito dell'ultimo controllo manuale. */
+  /** Outcome of the last manual check. */
   readonly lastCheck = signal<'none' | 'up-to-date' | 'updating' | 'error'>('none');
 
   start(): void {
@@ -31,11 +31,11 @@ export class UpdateService {
         void this.applyUpdate();
       }
     });
-    // Cache del service worker inutilizzabile (ad esempio svuotata dal sistema): si riparte da zero
+    // Service worker cache unusable (for example cleared by the system): start from scratch
     this.swUpdate.unrecoverable.subscribe(() => document.location.reload());
 
     setInterval(() => void this.check(), CHECK_INTERVAL_MS);
-    // iPadOS congela la PWA in background: al ritorno in primo piano si controlla subito
+    // iPadOS freezes the PWA in the background: check right away when it comes back to the foreground
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         void this.check();
@@ -44,7 +44,7 @@ export class UpdateService {
     void this.check();
   }
 
-  /** Controlla se c'è una versione nuova; se c'è, l'aggiornamento parte da solo. */
+  /** Checks for a new version; if there is one, the update starts on its own. */
   async check(): Promise<void> {
     if (!this.swUpdate.isEnabled || this.checking()) {
       return;
@@ -56,7 +56,7 @@ export class UpdateService {
         this.lastCheck.set('up-to-date');
       }
     } catch {
-      // Tipicamente rete assente: si riprova al prossimo giro
+      // Typically no network: try again next round
       this.lastCheck.set('error');
     } finally {
       this.checking.set(false);

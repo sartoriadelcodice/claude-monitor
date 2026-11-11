@@ -1,25 +1,29 @@
-import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 
+import { I18n } from '../../core/i18n.service';
 import { STATUS_META, Session, SessionEvent, formatElapsed, formatModel } from '../../core/models';
 import { SessionStore } from '../../core/session-store.service';
 
-/** Dettaglio di una sessione con la cronologia degli eventi. */
+/** Detail of a session with its event history. */
 @Component({
   selector: 'app-session-detail',
-  imports: [DatePipe, ButtonModule, DialogModule],
+  imports: [TranslocoPipe, ButtonModule, DialogModule],
   template: `
     <p-dialog [visible]="true" appendTo="body" [blockScroll]="false" (visibleChange)="!$event && closed.emit()" [modal]="true"
               [dismissableMask]="true" [draggable]="false" [header]="session().project"
               [style]="{ width: 'min(720px, 96vw)', maxHeight: '90dvh' }">
       <section class="summary" [style.--status]="meta().color">
-        <span class="badge">{{ meta().label }}</span>
-        <span>da {{ elapsed() }}</span>
+        <span class="badge">{{ 'status.' + session().status | transloco }}</span>
+        <span>{{ 'time.since' | transloco: { duration: elapsed() } }}</span>
         <span class="muted"><i class="pi pi-desktop"></i> {{ session().machine }}</span>
         @if (model(); as modelName) {
           <span class="muted"><i class="pi pi-microchip-ai"></i> {{ modelName }}</span>
+        }
+        @if (session().remoteSessionId) {
+          <span class="muted"><i class="pi pi-globe"></i> {{ 'session.remoteControl' | transloco }}</span>
         }
       </section>
       @if (session().title) {
@@ -32,21 +36,21 @@ import { SessionStore } from '../../core/session-store.service';
         <p class="message">{{ session().lastNotificationMessage }}</p>
       }
 
-      <h3>Cronologia</h3>
+      <h3>{{ 'session.history' | transloco }}</h3>
       @if (loading()) {
-        <p class="muted">Caricamento…</p>
+        <p class="muted">{{ 'common.loading' | transloco }}</p>
       } @else if (error()) {
-        <p class="muted">Cronologia non disponibile.</p>
+        <p class="muted">{{ 'session.historyUnavailable' | transloco }}</p>
       } @else {
         <ol class="timeline">
           @for (event of events(); track event.id) {
             <li [style.--status]="statusColor(event)">
               <div class="row">
                 <strong>{{ event.eventName }}</strong>
-                <time>{{ event.receivedAt | date: 'dd/MM HH:mm:ss' }}</time>
+                <time [attr.datetime]="event.receivedAt">{{ i18n.date(event.receivedAt, 'timeline') }}</time>
               </div>
               <div class="muted">
-                → {{ statusLabel(event) }}
+                → {{ 'status.' + event.statusAfter | transloco }}
                 @if (event.notificationType) {
                   · {{ event.notificationType }}
                 }
@@ -56,18 +60,18 @@ import { SessionStore } from '../../core/session-store.service';
               }
             </li>
           } @empty {
-            <li class="muted">Nessun evento registrato.</li>
+            <li class="muted">{{ 'session.noEvents' | transloco }}</li>
           }
         </ol>
       }
 
       <ng-template #footer>
         @if (session().archived) {
-          <p-button label="Ripristina" icon="pi pi-undo" severity="secondary" (onClick)="archive(false)" />
+          <p-button [label]="'session.restore' | transloco" icon="pi pi-undo" severity="secondary" (onClick)="archive(false)" />
         } @else {
-          <p-button label="Archivia" icon="pi pi-inbox" severity="secondary" (onClick)="archive(true)" />
+          <p-button [label]="'session.archive' | transloco" icon="pi pi-inbox" severity="secondary" (onClick)="archive(true)" />
         }
-        <p-button label="Chiudi" (onClick)="closed.emit()" />
+        <p-button [label]="'common.close' | transloco" (onClick)="closed.emit()" />
       </ng-template>
     </p-dialog>
   `,
@@ -135,6 +139,7 @@ import { SessionStore } from '../../core/session-store.service';
 })
 export class SessionDetail implements OnInit {
   private readonly store = inject(SessionStore);
+  protected readonly i18n = inject(I18n);
 
   readonly session = input.required<Session>();
   readonly closed = output<void>();
@@ -147,7 +152,9 @@ export class SessionDetail implements OnInit {
     const model = this.session().model;
     return model ? formatModel(model) : null;
   });
-  protected readonly elapsed = computed(() => formatElapsed(this.session().statusSince, this.store.now()));
+  protected readonly elapsed = computed(() =>
+    formatElapsed(this.session().statusSince, this.store.now(), (key, params) => this.i18n.t(key, params)),
+  );
 
   async ngOnInit(): Promise<void> {
     try {
@@ -157,10 +164,6 @@ export class SessionDetail implements OnInit {
     } finally {
       this.loading.set(false);
     }
-  }
-
-  protected statusLabel(event: SessionEvent): string {
-    return STATUS_META[event.statusAfter].label;
   }
 
   protected statusColor(event: SessionEvent): string {

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Gestione utenti, riservata agli amministratori (vedi SecurityConfig). */
+/** User management, restricted to administrators (see SecurityConfig). */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -43,7 +43,7 @@ public class UserController {
     @PatchMapping("/{id}")
     public UserDto update(@PathVariable Long id, @Valid @RequestBody UpdateRequest request) {
         return userService.update(id, request.password(), request.enabled(), request.role())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utente non trovato"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
     public record CreateRequest(

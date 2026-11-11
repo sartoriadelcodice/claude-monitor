@@ -12,7 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Evento hook registrato nella cronologia di una sessione. */
+/** Hook event recorded in a session's history. */
 @Entity
 @Table(name = "session_events")
 public class SessionEvent {

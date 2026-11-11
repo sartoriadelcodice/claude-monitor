@@ -16,8 +16,8 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Due meccanismi di autenticazione, entrambi via header Bearer:
- * chiave hook personale (POST /api/events e stream dell'agente sotto /api/agent/) e JWT per il frontend.
+ * Two authentication mechanisms, both via the Bearer header:
+ * personal hook key (POST /api/events and the agent stream under /api/agent/) and JWT for the frontend.
  */
 @Configuration
 public class SecurityConfig {
@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
-                        // I dispatch asincroni (SSE) sono già stati autorizzati alla richiesta iniziale
+                        // Async dispatches (SSE) were already authorized on the initial request
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/auth/login", "/actuator/health").permitAll()
                         .requestMatchers(AuthFilter.EVENTS_PATH, AuthFilter.AGENT_PATH_PREFIX + "**")

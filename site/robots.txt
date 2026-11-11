@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sartoriadelcodice.github.io/claude-monitor/sitemap.xml

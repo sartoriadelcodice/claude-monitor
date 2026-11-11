@@ -11,6 +11,10 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  messages:
+    basename: messages
+    # A language without its own file falls back to messages.properties (English), not to the JVM locale
+    fallback-to-system-locale: false
 
 server:
   port: 8080
@@ -23,19 +27,19 @@ management:
         include: health
 
 monitor:
-  # Token condiviso usato dagli hook di Claude Code (header Authorization: Bearer ...)
+  # Shared token used by the Claude Code hooks (header Authorization: Bearer ...)
   hook-token: ${HOOK_TOKEN:}
   auth:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:}
-    # Segreto HMAC per firmare i JWT: almeno 32 caratteri
+    # HMAC secret used to sign the JWTs: at least 32 characters
     jwt-secret: ${JWT_SECRET:}
     jwt-ttl: ${JWT_TTL:30d}
   sessions:
-    # Dopo quanto tempo senza eventi una sessione diventa STALE
+    # How long a session can go without events before it becomes STALE
     stale-after: ${STALE_AFTER:30m}
   push:
-    # Chiavi VAPID in base64url; se vuote le notifiche push sono disattivate
+    # VAPID keys in base64url; if empty, push notifications are disabled
     vapid-public-key: ${VAPID_PUBLIC_KEY:}
     vapid-private-key: ${VAPID_PRIVATE_KEY:}
     vapid-subject: ${VAPID_SUBJECT:mailto:admin@example.com}

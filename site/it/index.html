@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude Monitor — dashboard e avvisi in tempo reale per le sessioni Claude Code</title>
+  <meta name="description" content="Dashboard open source da ospitare in proprio: mostra in tempo reale tutte le sessioni Claude Code delle tue macchine, con avvisi sonori e notifiche push quando Claude chiede un permesso o aspetta la tua risposta. PWA per iPad, iPhone e computer." />
+  <meta name="keywords" content="Claude Code, dashboard Claude Code, hook Claude Code, notifiche Claude Code, monitorare sessioni Claude Code, agente AI per programmare, self-hosted, PWA, iPad, notifiche push, open source" />
+  <meta name="author" content="Sartoria del Codice" />
+  <meta name="theme-color" content="#2c3e50" />
+  <link rel="canonical" href="https://sartoriadelcodice.github.io/claude-monitor/it/" />
+  <link rel="alternate" hreflang="en" href="https://sartoriadelcodice.github.io/claude-monitor/" />
+  <link rel="alternate" hreflang="it" href="https://sartoriadelcodice.github.io/claude-monitor/it/" />
+  <link rel="alternate" hreflang="x-default" href="https://sartoriadelcodice.github.io/claude-monitor/" />
+  <link rel="icon" href="../favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="../assets/icon-192.png" />
+  <link rel="stylesheet" href="../assets/style.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Claude Monitor" />
+  <meta property="og:title" content="Claude Monitor — tutte le sessioni Claude Code, a colpo d'occhio" />
+  <meta property="og:description" content="Dashboard in tempo reale per Claude Code, con avvisi sonori e notifiche push. Open source, licenza MIT." />
+  <meta property="og:url" content="https://sartoriadelcodice.github.io/claude-monitor/it/" />
+  <meta property="og:image" content="https://sartoriadelcodice.github.io/claude-monitor/assets/social-preview.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta property="og:image:alt" content="Dashboard di Claude Monitor con sessioni Claude Code in stati diversi" />
+  <meta property="og:locale" content="it_IT" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Claude Monitor — tutte le sessioni Claude Code, a colpo d'occhio" />
+  <meta name="twitter:description" content="Dashboard in tempo reale per Claude Code, con avvisi sonori e notifiche push." />
+  <meta name="twitter:image" content="https://sartoriadelcodice.github.io/claude-monitor/assets/social-preview.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Claude Monitor",
+    "description": "Dashboard in tempo reale, da ospitare in proprio, per le sessioni Claude Code su più macchine, con avvisi sonori e notifiche push.",
+    "url": "https://sartoriadelcodice.github.io/claude-monitor/it/",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows, iPadOS, iOS, Android",
+    "softwareVersion": "0.7.0",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+    "inLanguage": ["it", "en"],
+    "screenshot": "https://sartoriadelcodice.github.io/claude-monitor/assets/screenshots/dashboard-it.png",
+    "downloadUrl": "https://github.com/sartoriadelcodice/claude-monitor",
+    "author": { "@type": "Organization", "name": "Sartoria del Codice", "url": "https://sartoriadelcodice.it" },
+    "sameAs": ["https://github.com/sartoriadelcodice/claude-monitor"]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Vai al contenuto</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="../assets/icon-192.png" alt="" width="32" height="32" />Claude Monitor</a>
+      <nav class="site-nav" aria-label="Principale">
+        <a class="optional" href="#funzioni">Funzioni</a>
+        <a class="optional" href="#come-funziona">Come funziona</a>
+        <a class="optional" href="#inizia">Inizia</a>
+        <a href="https://github.com/sartoriadelcodice/claude-monitor">GitHub</a>
+        <a class="lang" href="../" hreflang="en" lang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Open source · Da ospitare in proprio · MIT</p>
+        <h1>Tutte le sessioni Claude Code.<br />Un solo sguardo.</h1>
+        <p class="lead">
+          Claude Monitor riunisce in un'unica bacheca in tempo reale le sessioni di tutte le tue macchine e ti avvisa,
+          con un suono e una notifica push, nel momento in cui Claude chiede un permesso o aspetta la tua risposta.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#inizia">Inizia</a>
+          <a class="button secondary" href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/README.it.md">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            Vedi su GitHub
+          </a>
+        </div>
+        <img class="hero-shot" src="../assets/screenshots/dashboard-it.png" width="1600" height="1000"
+             alt="Dashboard di Claude Monitor: card delle sessioni Claude Code, due in attesa di attenzione, le altre al lavoro" />
+        <ul class="badges">
+          <li>macOS · Linux · Windows</li>
+          <li>PWA per iPad, iPhone e computer</li>
+          <li>Italiano e inglese</li>
+          <li>Docker Compose</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="alt" id="funzioni">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Funzioni</p>
+          <h2>Basta controllare i terminali. Sono le sessioni a chiamarti.</h2>
+          <p>Pensato per chi usa più sessioni di Claude Code insieme, su più di un computer.</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <h3>Tutte le sessioni, tutte le macchine</h3>
+            <p>Una card per sessione con stato, cartella, nome della sessione, macchina, modello e tempo nello stato, aggiornata in tempo reale.</p>
+          </article>
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>
+            <h3>Suoni e notifiche push</h3>
+            <p>Suoni diversi per «Richiede attenzione» e «Tocca a te», ripetuti finché non guardi, e Web Push anche con l'app chiusa.</p>
+          </article>
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <h3>Niente falsi allarmi</h3>
+            <p>Le sessioni con task in background o risvegli pianificati restano silenziose finché non tocca davvero a te.</p>
+          </article>
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18M8 21h8"/></svg>
+            <h3>Vai alla finestra</h3>
+            <p>Su macOS un agente facoltativo porta in primo piano il terminale giusto o l'app Claude, sul Mac che stai usando.</p>
+          </article>
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            <h3>Riservatezza</h3>
+            <p>Prompt, risposte e output dei tool vengono tolti prima di lasciare la tua macchina. Il server è tuo, i dati anche.</p>
+          </article>
+          <article class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
+            <h3>Più utenti, più lingue</h3>
+            <p>Chiavi hook e dispositivi personali per ogni utente. Interfaccia in italiano e inglese, facile da tradurre.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Stati delle sessioni</p>
+          <h2>Sette stati, due ti riguardano.</h2>
+          <p>Claude Monitor trasforma gli eventi degli hook di Claude Code in uno stato chiaro e ordina le card per urgenza.</p>
+        </div>
+        <ul class="states">
+          <li style="--state: var(--red)"><strong>Richiede attenzione</strong><span>Aspetta un permesso o una risposta. Suono e push.</span></li>
+          <li style="--state: var(--orange)"><strong>Tocca a te</strong><span>Risposta terminata, nulla in corso. Suono e push.</span></li>
+          <li style="--state: var(--green)"><strong>Al lavoro</strong><span>Claude sta lavorando.</span></li>
+          <li style="--state: var(--blue)"><strong>In background</strong><span>Per ora ha finito, il lavoro in background la riattiverà.</span></li>
+          <li style="--state: var(--gray)"><strong>In attesa del prompt</strong><span>Sessione aperta, nessun prompt inviato.</span></li>
+          <li style="--state: var(--gray)"><strong>Ferma</strong><span>Nessun evento da un po'.</span></li>
+          <li style="--state: var(--gray)"><strong>Terminata</strong><span>Chiusa e conservata nello storico.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="alt" id="come-funziona">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Come funziona</p>
+          <h2>Entrano gli hook, esce una bacheca in tempo reale.</h2>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Installa l'hook</h3>
+            <p>Crea una chiave nella dashboard ed esegui lo script generato su ogni macchina: registra un piccolo hook nelle impostazioni di Claude Code.</p>
+          </li>
+          <li>
+            <h3>Gli eventi diventano stati</h3>
+            <p>L'hook invia gli eventi della sessione al tuo server, che ne ricava lo stato e li salva in PostgreSQL.</p>
+          </li>
+          <li>
+            <h3>Sei tu a essere chiamato</h3>
+            <p>Ogni dashboard aperta si aggiorna subito; quando una sessione ti aspetta, i tuoi dispositivi suonano e ricevono una notifica.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Schermate</p>
+          <h2>Pensato per l'iPad sulla scrivania.</h2>
+          <p>Si installa come un'app, ha il tema chiaro e quello scuro, si legge anche da lontano.</p>
+        </div>
+        <div class="gallery">
+          <figure>
+            <img src="../assets/screenshots/dashboard-light.png" width="1600" height="1000" loading="lazy" alt="Dashboard nel tema chiaro, card raggruppate per device" />
+            <figcaption>Tema chiaro, raggruppamento per device</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/session-detail.png" width="1600" height="1000" loading="lazy" alt="Dettaglio di una sessione con la cronologia degli eventi" />
+            <figcaption>Dettaglio della sessione e cronologia</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/settings.png" width="1600" height="1000" loading="lazy" alt="Impostazioni con lingua, suoni e notifiche" />
+            <figcaption>Lingua, suoni, push e focus delle finestre</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/phone.png" class="portrait" width="1080" height="1920" loading="lazy" alt="Claude Monitor su un telefono" />
+            <figcaption>Anche sul telefono</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap split">
+        <div>
+          <p class="eyebrow">Riservatezza e sicurezza</p>
+          <h2>Il tuo codice resta sulle tue macchine.</h2>
+          <p>A Claude Monitor basta sapere <em>che</em> qualcosa è successo, non <em>su cosa</em> stai lavorando.</p>
+        </div>
+        <ul class="checks">
+          <li>L'hook toglie prompt, risposte, input e output dei tool prima dell'invio; il server li toglie di nuovo.</li>
+          <li>Si ospita in proprio con Docker Compose: nessun servizio di terzi, nessuna chiave API di Anthropic.</li>
+          <li>Password salvate con bcrypt, chiavi hook conservate solo come hash SHA-256.</li>
+          <li>L'agente facoltativo del focus riceve solo l'id della sessione, mai comandi, e si blocca davanti ad anomalie.</li>
+          <li>Ogni utente vede solo le proprie sessioni e riceve solo le proprie notifiche.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="inizia">
+      <div class="wrap split">
+        <div>
+          <p class="eyebrow">Inizia</p>
+          <h2>Operativo in cinque minuti.</h2>
+          <p>Servono Docker e un indirizzo HTTPS per la PWA e le notifiche push. L'<a
+            href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/README.it.md#avvio-rapido">avvio rapido</a>
+            spiega passo per passo chiavi, HTTPS e installazione sull'iPad.</p>
+          <p><a class="button primary" href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/README.it.md#avvio-rapido">Leggi l'avvio rapido</a></p>
+        </div>
+        <pre><code><span class="comment"># Scarica e configura</span>
+git clone https://github.com/sartoriadelcodice/claude-monitor.git
+cd claude-monitor && cp .env.example .env
+
+<span class="comment"># Chiavi per le notifiche push</span>
+scripts/generate-vapid-keys.sh
+
+<span class="comment"># Avvia lo stack su http://localhost:8088</span>
+docker compose up -d --build</code></pre>
+      </div>
+    </section>
+
+    <section class="alt faq">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Domande frequenti</p>
+          <h2>Domande</h2>
+        </div>
+        <details>
+          <summary>Claude Monitor vede il mio codice o i miei prompt?</summary>
+          <p>No. Vengono inviati solo i metadati degli eventi: nome dell'evento, id della sessione, nome della cartella, macchina, modello, tipo e testo della notifica.</p>
+        </details>
+        <details>
+          <summary>Funziona su Windows e Linux?</summary>
+          <p>Sì. L'hook esiste per Bash (macOS, Linux) e PowerShell (Windows). Solo l'agente facoltativo del focus è per macOS.</p>
+        </details>
+        <details>
+          <summary>Serve una chiave API di Anthropic?</summary>
+          <p>No. Claude Monitor non chiama servizi di Anthropic: riceve gli eventi degli hook di Claude Code che installi.</p>
+        </details>
+        <details>
+          <summary>È gratuito?</summary>
+          <p>Sì, è open source con licenza MIT. PrimeNG, usato dall'interfaccia, richiede una chiave PrimeUI gratuita (Community License).</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <h2>Open source, costruito con cura.</h2>
+        <p>Metti una stella al progetto, segnala un problema, aggiungi una traduzione. I contributi sono benvenuti.</p>
+        <a class="button primary" href="https://github.com/sartoriadelcodice/claude-monitor">Contribuisci su GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <a class="logo" href="https://sartoriadelcodice.it"><b>{</b> sartoria del codice <b>}</b></a>
+      <nav aria-label="Piè di pagina">
+        <a href="https://github.com/sartoriadelcodice/claude-monitor">Codice sorgente</a>
+        <a href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/docs/user-guide.it.md">Guida all'uso</a>
+        <a href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/SECURITY.md">Sicurezza</a>
+        <a href="https://github.com/sartoriadelcodice/claude-monitor/blob/main/LICENSE">Licenza MIT</a>
+        <a href="../" hreflang="en" lang="en">English</a>
+      </nav>
+      <small>Claude e Claude Code sono marchi di Anthropic, PBC. Claude Monitor è un progetto indipendente, non affiliato né approvato da Anthropic.</small>
+    </div>
+  </footer>
+</body>
+</html>

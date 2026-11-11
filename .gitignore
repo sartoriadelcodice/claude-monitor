@@ -1,4 +1,4 @@
-# Segreti e configurazione locale
+# Secrets and local configuration
 .env
 
 # Backend
@@ -9,7 +9,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.angular/
 
-# Editor e sistema
+# Editors and OS
 .idea/
 .vscode/
 *.iml

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Dopo il commit inoltra le modifiche delle sessioni a SSE e Web Push. */
+/** After the commit, forwards session changes to SSE and Web Push. */
 @Component
 public class SessionChangeListener {
 

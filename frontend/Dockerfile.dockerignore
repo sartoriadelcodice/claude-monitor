@@ -1,4 +1,4 @@
-# Contesto di build: solo frontend/ e hooks/
+# Build context: only frontend/ and hooks/
 *
 !frontend
 !hooks

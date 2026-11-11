@@ -7,9 +7,9 @@ import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 
 /**
- * Controllo dell'endpoint di una subscription Web Push. Il backend invia richieste a quell'indirizzo:
- * senza controllo un utente potrebbe farle arrivare a servizi interni (SSRF).
- * Si accettano solo URL https verso indirizzi pubblici.
+ * Validation of a Web Push subscription endpoint. The backend sends requests to that address:
+ * without validation a user could make them reach internal services (SSRF).
+ * Only https URLs pointing to public addresses are accepted.
  */
 final class PushEndpointValidator {
 
@@ -50,10 +50,10 @@ final class PushEndpointValidator {
         }
         byte[] bytes = address.getAddress();
         if (address instanceof Inet6Address) {
-            // fc00::/7: indirizzi locali univoci
+            // fc00::/7: unique local addresses
             return (bytes[0] & 0xfe) != 0xfc;
         }
-        // 100.64.0.0/10: spazio condiviso dei provider (CGNAT), usato anche da reti private
+        // 100.64.0.0/10: carrier-grade NAT shared address space (CGNAT), also used by private networks
         return !((bytes[0] & 0xff) == 100 && (bytes[1] & 0xc0) == 64);
     }
 }

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Gestione degli utenti: creazione, modifica, password. */
+/** User management: creation, changes, passwords. */
 @Service
 public class UserService {
 
@@ -26,7 +26,7 @@ public class UserService {
         this.clock = clock;
     }
 
-    /** Verifica le credenziali; vuoto se errate o se l'utente è disattivato. */
+    /** Checks the credentials; empty if they are wrong or the user is disabled. */
     @Transactional(readOnly = true)
     public Optional<User> authenticate(String username, String password) {
         return users.findByUsernameIgnoreCase(username.trim())
@@ -43,7 +43,7 @@ public class UserService {
     public UserDto create(String username, String password, Role role) {
         String name = username.trim();
         if (users.existsByUsernameIgnoreCase(name)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nome utente già in uso");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already in use");
         }
         User user = new User(name, passwordEncoder.encode(password), role != null ? role : Role.USER,
                 clock.instant());
@@ -51,8 +51,8 @@ public class UserService {
     }
 
     /**
-     * Modifica di un utente da parte di un amministratore. I parametri null vengono ignorati.
-     * Non si può disattivare o declassare l'ultimo amministratore attivo, per non restare chiusi fuori.
+     * Changes a user on behalf of an administrator. Null parameters are ignored.
+     * The last active administrator cannot be disabled or demoted, to avoid being locked out.
      */
     @Transactional
     public Optional<UserDto> update(Long id, String newPassword, Boolean enabled, Role role) {
@@ -61,7 +61,7 @@ public class UserService {
                     && (Boolean.FALSE.equals(enabled) || (role != null && role != Role.ADMIN));
             if (losesAdmin && users.countByRoleAndEnabledTrue(Role.ADMIN) <= 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Deve restare almeno un amministratore attivo");
+                        "At least one active administrator must remain");
             }
             if (newPassword != null) {
                 user.setPasswordHash(passwordEncoder.encode(newPassword));
@@ -76,13 +76,13 @@ public class UserService {
         });
     }
 
-    /** Cambio della propria password, con verifica di quella attuale. */
+    /** Changes one's own password, after checking the current one. */
     @Transactional
     public void changeOwnPassword(Long userId, String currentPassword, String newPassword) {
         User user = users.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password attuale non corretta");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
         }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         users.save(user);

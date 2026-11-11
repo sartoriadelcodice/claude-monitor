@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    groups:
+      angular:
+        patterns: ['@angular/*', '@angular-devkit/*', 'typescript']
+      primeng:
+        patterns: ['primeng', 'primeicons', '@primeuix/*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

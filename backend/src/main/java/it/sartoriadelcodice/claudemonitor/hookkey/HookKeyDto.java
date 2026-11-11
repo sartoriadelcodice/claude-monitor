@@ -2,7 +2,7 @@ package it.sartoriadelcodice.claudemonitor.hookkey;
 
 import java.time.Instant;
 
-/** Chiave hook come appare nell'elenco: mai la chiave in chiaro. */
+/** Hook key as it appears in the list: never the plain key. */
 public record HookKeyDto(Long id, String name, String prefix, Instant createdAt, Instant lastUsedAt,
                          Instant revokedAt) {
 

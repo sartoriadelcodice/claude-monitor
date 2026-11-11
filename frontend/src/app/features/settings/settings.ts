@@ -1,161 +1,176 @@
-import { Component, OnInit, inject, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { SelectModule } from 'primeng/select';
 import { SliderModule } from 'primeng/slider';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
 import { ChangePassword } from '../account/change-password';
 import { AudioService } from '../../core/audio.service';
 import { AuthService } from '../../core/auth.service';
+import { I18n, LANGUAGES, LANGUAGE_NAMES, LanguageSetting, browserLanguage } from '../../core/i18n.service';
 import { PushService } from '../../core/push.service';
 import { SessionStore } from '../../core/session-store.service';
 import { SettingsService } from '../../core/settings.service';
 import { UpdateService } from '../../core/update.service';
 import { APP_BUILD, APP_VERSION } from '../../core/version';
 
-/** Impostazioni della dashboard: suoni, notifiche, storico. */
+/** Dashboard settings: language, sounds, notifications, view, window focus, version and account. */
 @Component({
   selector: 'app-settings',
   imports: [
     FormsModule,
+    TranslocoPipe,
     ButtonModule,
     DialogModule,
     InputNumberModule,
+    SelectModule,
     SliderModule,
     ToggleSwitchModule,
     ChangePassword,
   ],
   template: `
     <p-dialog [visible]="true" appendTo="body" [blockScroll]="false" (visibleChange)="!$event && closed.emit()" [modal]="true"
-              [dismissableMask]="true" [draggable]="false" header="Impostazioni"
+              [dismissableMask]="true" [draggable]="false" [header]="'settings.title' | transloco"
               [style]="{ width: 'min(520px, 96vw)' }">
-      <h3>Suoni</h3>
+      <h3>{{ 'settings.languageTitle' | transloco }}</h3>
       <div class="row">
-        <span>Avvisi sonori</span>
+        <span>{{ 'settings.language' | transloco }}</span>
+        <p-select [options]="languageOptions()" optionLabel="label" optionValue="value" appendTo="body"
+                  [ngModel]="i18n.setting()" (ngModelChange)="setLanguage($event)"
+                  [ariaLabel]="'settings.language' | transloco" />
+      </div>
+
+      <h3>{{ 'settings.soundsTitle' | transloco }}</h3>
+      <div class="row">
+        <span>{{ 'settings.soundAlerts' | transloco }}</span>
         <p-toggleswitch [ngModel]="settings().soundsEnabled === true" (ngModelChange)="toggleSounds($event)" />
       </div>
       <div class="row">
-        <span>Volume</span>
+        <span>{{ 'settings.volume' | transloco }}</span>
         <p-slider class="slider" [min]="0" [max]="100" [step]="5" [disabled]="!settings().soundsEnabled"
                   [ngModel]="settings().volume" (ngModelChange)="settingsService.update({ volume: $event })" />
       </div>
       <div class="row">
-        <span>Prova</span>
+        <span>{{ 'settings.test' | transloco }}</span>
         <span class="buttons">
-          <p-button label="Attenzione" size="small" severity="danger" [outlined]="true"
+          <p-button [label]="'settings.testAttention' | transloco" size="small" severity="danger" [outlined]="true"
                     [disabled]="!audio.enabled()" (onClick)="audio.test('attention')" />
-          <p-button label="Tocca a te" size="small" severity="warn" [outlined]="true"
+          <p-button [label]="'settings.testWaiting' | transloco" size="small" severity="warn" [outlined]="true"
                     [disabled]="!audio.enabled()" (onClick)="audio.test('waiting')" />
         </span>
       </div>
-      <p class="muted diagnostics">Stato audio: {{ audio.diagnostics() }}</p>
+      <p class="muted diagnostics">{{ 'settings.audioStatus' | transloco: { status: audio.diagnostics() } }}</p>
       <div class="row">
-        <span>Ripeti il suono di «Richiede attenzione» finché non è vista</span>
+        <span>{{ 'settings.repeat' | transloco }}</span>
         <p-toggleswitch [ngModel]="settings().repeatEnabled"
                         (ngModelChange)="settingsService.update({ repeatEnabled: $event })" />
       </div>
       <div class="row">
-        <span>Intervallo di ripetizione (secondi)</span>
+        <span>{{ 'settings.repeatSeconds' | transloco }}</span>
         <p-inputnumber [min]="5" [max]="600" [step]="5" [showButtons]="true" [disabled]="!settings().repeatEnabled"
                        [ngModel]="settings().repeatSeconds" inputStyleClass="seconds"
                        (ngModelChange)="settingsService.update({ repeatSeconds: $event ?? 30 })" />
       </div>
 
-      <h3>Notifiche push</h3>
+      <h3>{{ 'settings.pushTitle' | transloco }}</h3>
       @switch (push.state()) {
         @case ('granted') {
           <div class="row">
-            <span>Ricevi le notifiche su questo dispositivo</span>
+            <span>{{ 'settings.pushReceive' | transloco }}</span>
             <p-toggleswitch [ngModel]="settings().pushEnabled" [disabled]="pushBusy()"
                             (ngModelChange)="togglePush($event)" />
           </div>
         }
         @case ('default') {
           <div class="row">
-            <span>Ricevi una notifica quando una sessione ti aspetta</span>
-            <p-button label="Attiva" size="small" (onClick)="push.enable()" />
+            <span>{{ 'settings.pushOffer' | transloco }}</span>
+            <p-button [label]="'settings.pushEnable' | transloco" size="small" (onClick)="push.enable()" />
           </div>
         }
         @case ('denied') {
-          <p class="muted">Permesso negato: riattivalo dalle impostazioni di sistema.</p>
+          <p class="muted">{{ 'settings.pushDenied' | transloco }}</p>
         }
         @case ('needs-install') {
-          <p class="muted">Aggiungi Claude Monitor alla schermata Home per ricevere le notifiche.</p>
+          <p class="muted">{{ 'settings.pushNeedsInstall' | transloco }}</p>
         }
         @default {
-          <p class="muted">Non disponibili in questo browser.</p>
+          <p class="muted">{{ 'settings.pushUnsupported' | transloco }}</p>
         }
       }
-      @if (push.error()) {
-        <p class="error">{{ push.error() }}</p>
+      @if (push.error(); as error) {
+        <p class="error">{{ error | transloco }}</p>
       }
 
-      <h3>Vista</h3>
+      <h3>{{ 'settings.viewTitle' | transloco }}</h3>
       <div class="row">
-        <span>Mostra anche lo storico (terminate e archiviate)</span>
+        <span>{{ 'settings.history' | transloco }}</span>
         <p-toggleswitch [ngModel]="store.includeHistory()" (ngModelChange)="store.setIncludeHistory($event)" />
       </div>
 
       <div class="row">
-        <span>Ingrandisci la card quando una sessione richiede attenzione</span>
+        <span>{{ 'settings.zoom' | transloco }}</span>
         <p-toggleswitch [ngModel]="settings().zoomEnabled"
                         (ngModelChange)="settingsService.update({ zoomEnabled: $event })" />
       </div>
       <div class="row">
-        <span>Durata dell'ingrandimento (secondi)</span>
+        <span>{{ 'settings.zoomSeconds' | transloco }}</span>
         <p-inputnumber [min]="1" [max]="600" [step]="5" [showButtons]="true" [disabled]="!settings().zoomEnabled"
                        [ngModel]="settings().zoomSeconds" inputStyleClass="seconds"
                        (ngModelChange)="settingsService.update({ zoomSeconds: $event ?? 10 })" />
       </div>
 
-      <h3>Focus delle finestre</h3>
+      <h3>{{ 'settings.focusTitle' | transloco }}</h3>
       <div class="row">
-        <span>Consenti alla dashboard di portare in primo piano le finestre di Claude Code</span>
+        <span>{{ 'settings.focusToggle' | transloco }}</span>
         <p-toggleswitch [ngModel]="focusEnabled() === true" [disabled]="focusEnabled() === null || focusBusy()"
                         (ngModelChange)="toggleFocus($event)" />
       </div>
       <p class="muted diagnostics">
         @if (focusError()) {
-          Modifica non riuscita: riprova.
+          {{ 'settings.focusError' | transloco }}
         } @else if (focusEnabled() === false) {
-          Spento su tutte le tue macchine e sessioni: gli agenti sono stati scollegati e il server rifiuta
-          ogni richiesta di focus finché non lo riaccendi.
+          {{ 'settings.focusOff' | transloco }}
         } @else {
-          Vale per tutte le tue macchine e sessioni. Spegnendolo gli agenti vengono scollegati subito.
+          {{ 'settings.focusOn' | transloco }}
         }
       </p>
 
-      <h3>Versione</h3>
+      <h3>{{ 'settings.versionTitle' | transloco }}</h3>
       <div class="row">
         <span>
           Claude Monitor {{ version }}
-          <span class="muted build">build {{ build }}</span>
+          <span class="muted build">
+            {{ 'settings.build' | transloco: { build: build ?? ('settings.devBuild' | transloco) } }}
+          </span>
         </span>
         @if (updates.enabled) {
-          <p-button label="Controlla aggiornamenti" size="small" severity="secondary"
+          <p-button [label]="'settings.checkUpdates' | transloco" size="small" severity="secondary"
                     [loading]="updates.checking()" (onClick)="updates.check()" />
         }
       </div>
       @switch (updates.lastCheck()) {
         @case ('up-to-date') {
-          <p class="muted">È la versione più recente.</p>
+          <p class="muted">{{ 'settings.upToDate' | transloco }}</p>
         }
         @case ('updating') {
-          <p class="muted">Nuova versione trovata: aggiornamento in corso…</p>
+          <p class="muted">{{ 'settings.updating' | transloco }}</p>
         }
         @case ('error') {
-          <p class="muted">Controllo non riuscito: server non raggiungibile.</p>
+          <p class="muted">{{ 'settings.updateError' | transloco }}</p>
         }
       }
 
-      <h3>Account · {{ auth.user()?.username }}</h3>
+      <h3>{{ 'settings.accountTitle' | transloco: { username: auth.user()?.username } }}</h3>
       <app-change-password />
 
       <ng-template #footer>
-        <p-button label="Esci" icon="pi pi-sign-out" severity="secondary" (onClick)="auth.logout()" />
-        <p-button label="Chiudi" (onClick)="closed.emit()" />
+        <p-button [label]="'settings.signOut' | transloco" icon="pi pi-sign-out" severity="secondary"
+                  (onClick)="auth.logout()" />
+        <p-button [label]="'common.close' | transloco" (onClick)="closed.emit()" />
       </ng-template>
     </p-dialog>
   `,
@@ -210,6 +225,7 @@ export class Settings implements OnInit {
   protected readonly store = inject(SessionStore);
   protected readonly auth = inject(AuthService);
   protected readonly updates = inject(UpdateService);
+  protected readonly i18n = inject(I18n);
   protected readonly version = APP_VERSION;
   protected readonly build = APP_BUILD;
 
@@ -219,7 +235,13 @@ export class Settings implements OnInit {
 
   protected readonly pushBusy = signal(false);
 
-  /** Interruttore del focus, salvato sul server: null finché non è stato letto. */
+  /** "Automatic" shows the language it resolves to; each language is named in its own language. */
+  protected readonly languageOptions = computed<{ label: string; value: LanguageSetting }[]>(() => [
+    { label: this.i18n.t('settings.languageAuto', { language: LANGUAGE_NAMES[browserLanguage()] }), value: 'auto' },
+    ...LANGUAGES.map((language) => ({ label: LANGUAGE_NAMES[language], value: language })),
+  ]);
+
+  /** Window focus switch, saved on the server: null until it has been read. */
   protected readonly focusEnabled = signal<boolean | null>(null);
   protected readonly focusBusy = signal(false);
   protected readonly focusError = signal(false);
@@ -232,7 +254,7 @@ export class Settings implements OnInit {
     const previous = this.focusEnabled();
     this.focusBusy.set(true);
     this.focusError.set(false);
-    // Si mostra subito la scelta; se il salvataggio fallisce si torna al valore di prima
+    // Show the choice right away; if saving fails, go back to the previous value
     this.focusEnabled.set(enabled);
     try {
       this.focusEnabled.set(await this.store.setFocusEnabled(enabled));
@@ -247,16 +269,22 @@ export class Settings implements OnInit {
   protected async togglePush(enabled: boolean): Promise<void> {
     this.pushBusy.set(true);
     try {
-      // Il tocco sull'interruttore è il gesto richiesto dal browser per creare la subscription
+      // The tap on the switch is the gesture the browser requires to create the subscription
       await (enabled ? this.push.enable() : this.push.disable());
     } finally {
       this.pushBusy.set(false);
     }
   }
 
+  protected setLanguage(language: LanguageSetting | null): void {
+    if (language) {
+      this.settingsService.update({ language });
+    }
+  }
+
   protected toggleSounds(enabled: boolean): void {
     if (enabled) {
-      // Il tocco sull'interruttore è il gesto che sblocca l'audio
+      // The tap on the switch is the gesture that unlocks audio
       this.audio.enable();
     } else {
       this.audio.disable();

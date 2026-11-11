@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Registrazione delle subscription Web Push dei dispositivi. */
+/** Registration of the devices' Web Push subscriptions. */
 @RestController
 @RequestMapping("/api/push")
 public class PushController {
@@ -38,7 +38,7 @@ public class PushController {
         this.clock = clock;
     }
 
-    /** Chiave pubblica VAPID necessaria al browser per creare la subscription. */
+    /** VAPID public key the browser needs to create the subscription. */
     @GetMapping("/public-key")
     public PublicKeyResponse publicKey() {
         var push = properties.push();
@@ -51,13 +51,14 @@ public class PushController {
     public void subscribe(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody SubscriptionRequest request,
                           @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent) {
         if (!PushEndpointValidator.isAllowed(request.endpoint())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint push non valido");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid push endpoint");
         }
         String agent = userAgent != null && userAgent.length() > 500 ? userAgent.substring(0, 500) : userAgent;
+        String language = PushNotifier.supportedLanguage(request.language());
         subscriptions.findByEndpoint(request.endpoint()).ifPresentOrElse(
-                existing -> existing.update(user.id(), request.keys().p256dh(), request.keys().auth(), agent),
+                existing -> existing.update(user.id(), request.keys().p256dh(), request.keys().auth(), agent, language),
                 () -> subscriptions.save(new PushSubscription(user.id(), request.endpoint(), request.keys().p256dh(),
-                        request.keys().auth(), agent, clock.instant())));
+                        request.keys().auth(), agent, language, clock.instant())));
     }
 
     @DeleteMapping("/subscriptions")
@@ -70,8 +71,11 @@ public class PushController {
     public record PublicKeyResponse(boolean enabled, String publicKey) {
     }
 
-    /** Stessa forma di PushSubscription.toJSON() del browser. */
-    public record SubscriptionRequest(@NotBlank String endpoint, @NotNull @Valid Keys keys) {
+    /**
+     * Same shape as the browser's PushSubscription.toJSON(), plus the interface language of the device
+     * (optional: unknown or missing languages fall back to English).
+     */
+    public record SubscriptionRequest(@NotBlank String endpoint, @NotNull @Valid Keys keys, String language) {
 
         public record Keys(@NotBlank String p256dh, @NotBlank String auth) {
         }

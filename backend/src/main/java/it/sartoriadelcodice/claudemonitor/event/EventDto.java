@@ -4,7 +4,7 @@ import java.time.Instant;
 
 import it.sartoriadelcodice.claudemonitor.session.SessionStatus;
 
-/** Voce della cronologia esposta al frontend. */
+/** History entry exposed to the frontend. */
 public record EventDto(Long id, String eventName, String notificationType, String message,
                        SessionStatus statusAfter, Instant receivedAt) {
 

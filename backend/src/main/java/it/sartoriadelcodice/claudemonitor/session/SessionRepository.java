@@ -19,7 +19,7 @@ public interface SessionRepository extends JpaRepository<Session, String> {
 
     Optional<Session> findByIdAndUserId(String id, Long userId);
 
-    /** Assegna a un utente le sessioni create prima della gestione multiutente. */
+    /** Assigns to a user the sessions created before multi-user support. */
     @Modifying
     @Query("update Session s set s.userId = :userId where s.userId is null")
     int assignOrphansTo(@Param("userId") Long userId);

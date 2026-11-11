@@ -4,7 +4,7 @@ import { catchError, throwError } from 'rxjs';
 
 import { AuthService } from './auth.service';
 
-/** Aggiunge il JWT alle chiamate API e torna al login se il token non è più valido. */
+/** Adds the JWT to API calls and goes back to sign-in when the token is no longer valid. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const token = auth.token();

@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
@@ -11,29 +12,29 @@ import { AuthService, Role } from '../../core/auth.service';
 
 const MIN_PASSWORD_LENGTH = 10;
 
-/** Gestione utenti, visibile solo agli amministratori. */
+/** User management, visible to administrators only. */
 @Component({
   selector: 'app-users',
-  imports: [FormsModule, ButtonModule, DialogModule, InputTextModule, ToggleSwitchModule],
+  imports: [FormsModule, TranslocoPipe, ButtonModule, DialogModule, InputTextModule, ToggleSwitchModule],
   template: `
     <p-dialog [visible]="true" appendTo="body" [blockScroll]="false" (visibleChange)="!$event && closed.emit()" [modal]="true"
-              [dismissableMask]="true" [draggable]="false" header="Utenti"
+              [dismissableMask]="true" [draggable]="false" [header]="'users.title' | transloco"
               [style]="{ width: 'min(680px, 96vw)', maxHeight: '90dvh' }">
       <form class="create" (ngSubmit)="create()">
-        <input pInputText name="username" placeholder="Nome utente" autocapitalize="none" autocomplete="off"
+        <input pInputText name="username" [placeholder]="'users.username' | transloco" autocapitalize="none" autocomplete="off"
                [ngModel]="username()" (ngModelChange)="username.set($event)" />
-        <input pInputText name="password" type="password" placeholder="Password (minimo 10 caratteri)"
+        <input pInputText name="password" type="password" [placeholder]="'users.password' | transloco"
                autocomplete="new-password" [ngModel]="password()" (ngModelChange)="password.set($event)" />
         <label class="admin">
           <p-toggleswitch name="admin" [ngModel]="admin()" (ngModelChange)="admin.set($event)" />
-          Amministratore
+          {{ 'users.admin' | transloco }}
         </label>
-        <p-button type="submit" label="Crea utente" icon="pi pi-user-plus" [loading]="busy()"
+        <p-button type="submit" [label]="'users.create' | transloco" icon="pi pi-user-plus" [loading]="busy()"
                   [disabled]="!canCreate()" />
       </form>
 
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
+      @if (error(); as error) {
+        <p class="error" role="alert">{{ error | transloco }}</p>
       }
 
       <ul class="list">
@@ -42,28 +43,30 @@ const MIN_PASSWORD_LENGTH = 10;
             <div class="info">
               <strong>{{ user.username }}</strong>
               <span class="muted">
-                {{ user.role === 'ADMIN' ? 'Amministratore' : 'Utente' }}
+                {{ (user.role === 'ADMIN' ? 'users.roleAdmin' : 'users.roleUser') | transloco }}
                 @if (!user.enabled) {
-                  · disattivato
+                  · {{ 'users.disabled' | transloco }}
                 }
                 @if (isSelf(user)) {
-                  · sei tu
+                  · {{ 'users.you' | transloco }}
                 }
               </span>
             </div>
             <span class="buttons">
               @if (resetting() === user.id) {
-                <input pInputText type="password" placeholder="Nuova password" autocomplete="new-password"
+                <input pInputText type="password" [placeholder]="'users.newPassword' | transloco" autocomplete="new-password"
                        [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)" />
-                <p-button label="Salva" size="small" [disabled]="newPassword().length < minLength"
+                <p-button [label]="'common.save' | transloco" size="small" [disabled]="newPassword().length < minLength"
                           (onClick)="resetPassword(user)" />
-                <p-button label="Annulla" size="small" severity="secondary" (onClick)="resetting.set(null)" />
+                <p-button [label]="'common.cancel' | transloco" size="small" severity="secondary"
+                          (onClick)="resetting.set(null)" />
               } @else {
-                <p-button label="Password" size="small" severity="secondary" (onClick)="startReset(user)" />
+                <p-button [label]="'users.passwordButton' | transloco" size="small" severity="secondary"
+                          (onClick)="startReset(user)" />
                 @if (!isSelf(user)) {
-                  <p-button [label]="user.role === 'ADMIN' ? 'Rendi utente' : 'Rendi admin'" size="small"
+                  <p-button [label]="(user.role === 'ADMIN' ? 'users.makeUser' : 'users.makeAdmin') | transloco" size="small"
                             severity="secondary" (onClick)="toggleRole(user)" />
-                  <p-button [label]="user.enabled ? 'Disattiva' : 'Riattiva'" size="small"
+                  <p-button [label]="(user.enabled ? 'users.disable' : 'users.enable') | transloco" size="small"
                             [severity]="user.enabled ? 'danger' : 'secondary'" [outlined]="true"
                             (onClick)="toggleEnabled(user)" />
                 }
@@ -74,7 +77,7 @@ const MIN_PASSWORD_LENGTH = 10;
       </ul>
 
       <ng-template #footer>
-        <p-button label="Chiudi" (onClick)="closed.emit()" />
+        <p-button [label]="'common.close' | transloco" (onClick)="closed.emit()" />
       </ng-template>
     </p-dialog>
   `,
@@ -144,6 +147,7 @@ export class Users implements OnInit {
   protected readonly resetting = signal<number | null>(null);
   protected readonly newPassword = signal('');
   protected readonly busy = signal(false);
+  /** Translation key of the last error. */
   protected readonly error = signal<string | null>(null);
 
   ngOnInit(): void {
@@ -163,7 +167,8 @@ export class Users implements OnInit {
       return;
     }
     this.busy.set(true);
-    await this.run(async () => {
+    // On creation a conflict means the username is taken
+    await this.run('users.usernameTaken', async () => {
       const role: Role = this.admin() ? 'ADMIN' : 'USER';
       await this.api.createUser(this.username().trim(), this.password(), role);
       this.username.set('');
@@ -179,27 +184,30 @@ export class Users implements OnInit {
   }
 
   protected resetPassword(user: UserAccount): Promise<void> {
-    return this.run(async () => {
+    return this.run('users.failed', async () => {
       await this.api.updateUser(user.id, { password: this.newPassword() });
       this.resetting.set(null);
     });
   }
 
   protected toggleRole(user: UserAccount): Promise<void> {
-    return this.run(() => this.api.updateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }));
+    // On role and status changes a conflict means the last active administrator would be lost
+    return this.run('users.lastAdmin', () =>
+      this.api.updateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }),
+    );
   }
 
   protected toggleEnabled(user: UserAccount): Promise<void> {
-    return this.run(() => this.api.updateUser(user.id, { enabled: !user.enabled }));
+    return this.run('users.lastAdmin', () => this.api.updateUser(user.id, { enabled: !user.enabled }));
   }
 
-  /** Esegue una modifica, mostra l'eventuale errore del server e ricarica l'elenco. */
-  private async run(action: () => Promise<unknown>): Promise<void> {
+  /** Runs a change, shows the server error if any and reloads the list. */
+  private async run(conflictKey: string, action: () => Promise<unknown>): Promise<void> {
     this.error.set(null);
     try {
       await action();
     } catch (e) {
-      this.error.set(describe(e));
+      this.error.set(describe(e, conflictKey));
     }
     await this.reload();
   }
@@ -208,20 +216,20 @@ export class Users implements OnInit {
     try {
       this.users.set(await this.api.users());
     } catch {
-      this.error.set('Elenco utenti non disponibile.');
+      this.error.set('users.listUnavailable');
     }
   }
 }
 
-function describe(error: unknown): string {
+/** Translation key for a failed change; the server message is not shown, so that it can be translated. */
+function describe(error: unknown, conflictKey: string): string {
   if (error instanceof HttpErrorResponse) {
     if (error.status === 409) {
-      return (error.error as { detail?: string; message?: string } | null)?.detail
-        ?? 'Operazione non consentita: nome già in uso oppure è l\'ultimo amministratore attivo.';
+      return conflictKey;
     }
     if (error.status === 400) {
-      return 'Dati non validi: il nome utente accetta lettere, cifre e . _ @ -, la password almeno 10 caratteri.';
+      return 'users.invalid';
     }
   }
-  return 'Operazione non riuscita.';
+  return 'users.failed';
 }

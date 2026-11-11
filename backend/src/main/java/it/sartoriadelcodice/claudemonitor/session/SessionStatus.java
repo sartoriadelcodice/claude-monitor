@@ -1,23 +1,23 @@
 package it.sartoriadelcodice.claudemonitor.session;
 
-/** Stati possibili di una sessione Claude Code. */
+/** Possible statuses of a Claude Code session. */
 public enum SessionStatus {
-    /** Aperta, in attesa del primo prompt. */
+    /** Open, waiting for the first prompt. */
     IDLE,
-    /** Claude sta lavorando. */
+    /** Claude is working. */
     WORKING,
-    /** Serve un intervento: permesso o input richiesto. */
+    /** Action needed: permission or input required. */
     NEEDS_ATTENTION,
-    /** Risposta terminata, tocca all'utente. */
+    /** Response finished, it is the user's turn. */
     WAITING_INPUT,
-    /** Risposta terminata ma con task in background o risvegli pianificati: ripartirà da sola. */
+    /** Response finished but with background tasks or scheduled wake-ups: it will resume on its own. */
     BACKGROUND,
-    /** Sessione chiusa. */
+    /** Session ended. */
     ENDED,
-    /** Nessun evento da troppo tempo. */
+    /** No events for too long. */
     STALE;
 
-    /** Stati che richiedono l'attenzione dell'utente (suono e notifica push). */
+    /** Statuses that require the user's attention (sound and push notification). */
     public boolean requiresAttention() {
         return this == NEEDS_ATTENTION || this == WAITING_INPUT;
     }

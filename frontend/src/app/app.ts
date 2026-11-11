@@ -10,7 +10,7 @@ import { UpdateService } from './core/update.service';
 })
 export class App {
   constructor() {
-    // Aggiornamento automatico della PWA, attivo anche nella pagina di login
+    // Automatic PWA update, active on the sign-in page too
     inject(UpdateService).start();
   }
 }

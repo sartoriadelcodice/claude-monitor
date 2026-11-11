@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="it" class="app-dark">
+<html lang="en" class="app-dark">
   <head>
     <meta charset="utf-8" />
     <title>Claude Monitor</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Live dashboard of your Claude Code sessions across machines, with sound alerts and push notifications." />
     <meta name="theme-color" content="#0b0f17" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -14,18 +15,23 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <script>
-      // Tema chiaro applicato prima dell'avvio dell'app, per non mostrare un lampo di tema scuro.
-      // Stessa chiave e stessi colori di SettingsService.
+      // Theme and language applied before the app starts, to avoid a flash of the dark theme.
+      // Same key, colors and language rules as SettingsService and I18n.
       try {
-        if (JSON.parse(localStorage.getItem('cm.settings') || '{}').theme === 'light') {
+        var settings = JSON.parse(localStorage.getItem('cm.settings') || '{}');
+        if (settings.theme === 'light') {
           document.documentElement.classList.remove('app-dark');
           document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f3f5f9');
         }
+        var language = settings.language && settings.language !== 'auto' ? settings.language
+          : (navigator.languages || [navigator.language]).map(function (tag) { return String(tag).toLowerCase().split('-')[0]; })
+              .filter(function (base) { return base === 'en' || base === 'it'; })[0];
+        document.documentElement.lang = language || 'en';
       } catch (e) {}
     </script>
   </head>
   <body>
     <app-root></app-root>
-    <noscript>Per usare Claude Monitor serve JavaScript.</noscript>
+    <noscript>Claude Monitor requires JavaScript. · Claude Monitor richiede JavaScript.</noscript>
   </body>
 </html>

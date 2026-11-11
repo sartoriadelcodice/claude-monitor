@@ -1,6 +1,6 @@
-import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
@@ -8,81 +8,69 @@ import { SelectButtonModule } from 'primeng/selectbutton';
 
 import { AdminApi, CreatedHookKey, HookKey } from '../../core/admin-api.service';
 import { HookInstaller, InstallerPlatform, detectPlatform } from '../../core/hook-installer.service';
+import { I18n } from '../../core/i18n.service';
 
-/** Chiavi hook dell'utente: creazione, elenco e revoca. */
+/** The user's hook keys: creation, list and revocation. */
 @Component({
   selector: 'app-hook-keys',
-  imports: [DatePipe, FormsModule, ButtonModule, DialogModule, InputTextModule, SelectButtonModule],
+  imports: [FormsModule, TranslocoPipe, ButtonModule, DialogModule, InputTextModule, SelectButtonModule],
   template: `
     <p-dialog [visible]="true" appendTo="body" [blockScroll]="false" (visibleChange)="!$event && closed.emit()" [modal]="true"
-              [dismissableMask]="true" [draggable]="false" header="Chiavi hook"
+              [dismissableMask]="true" [draggable]="false" [header]="'hookKeys.title' | transloco"
               [style]="{ width: 'min(680px, 96vw)', maxHeight: '90dvh' }">
-      <p class="muted">
-        Ogni macchina usa una chiave per inviare gli eventi di Claude Code. Le sessioni che arrivano con una
-        tua chiave le vedi solo tu. Conviene una chiave per macchina, così puoi revocarne una sola.
-      </p>
+      <p class="muted">{{ 'hookKeys.intro' | transloco }}</p>
 
       <form class="create" (ngSubmit)="create()">
-        <input pInputText name="name" placeholder="Nome, ad esempio MacBook ufficio" maxlength="100"
+        <input pInputText name="name" [placeholder]="'hookKeys.namePlaceholder' | transloco" maxlength="100"
                [ngModel]="name()" (ngModelChange)="name.set($event)" />
-        <p-button type="submit" label="Crea chiave" icon="pi pi-plus" [loading]="busy()"
+        <p-button type="submit" [label]="'hookKeys.create' | transloco" icon="pi pi-plus" [loading]="busy()"
                   [disabled]="!name().trim()" />
       </form>
 
       @if (created(); as key) {
         <section class="created">
-          <strong>Chiave «{{ key.name }}» creata</strong>
-          <p>Copiala adesso: non sarà più visibile. Va in <code>CLAUDE_MONITOR_TOKEN</code> su quella macchina.</p>
+          <strong>{{ 'hookKeys.created' | transloco: { name: key.name } }}</strong>
+          <p [innerHTML]="'hookKeys.copyNow' | transloco"></p>
           <div class="secret">
             <code>{{ key.key }}</code>
-            <p-button [label]="copied() ? 'Copiata' : 'Copia'" icon="pi pi-copy" size="small"
+            <p-button [label]="(copied() ? 'common.copied' : 'common.copy') | transloco" icon="pi pi-copy" size="small"
                       severity="secondary" (onClick)="copy(key.key)" />
           </div>
 
           <div class="install">
-            <strong>Installazione automatica</strong>
-            <p>
-              Scarica lo script sulla macchina da collegare ed eseguilo: installa l'hook e aggiorna le impostazioni
-              globali di Claude Code, dopo averne salvato una copia di sicurezza.
-            </p>
+            <strong>{{ 'hookKeys.autoInstall' | transloco }}</strong>
+            <p>{{ 'hookKeys.autoInstallIntro' | transloco }}</p>
             <div class="download">
               <p-selectbutton [options]="platforms" optionLabel="label" optionValue="value" [allowEmpty]="false"
                               [ngModel]="platform()" (ngModelChange)="$event && platform.set($event)" size="small" />
-              <p-button label="Scarica lo script" icon="pi pi-download" size="small" [loading]="downloading()"
+              <p-button [label]="'hookKeys.download' | transloco" icon="pi pi-download" size="small" [loading]="downloading()"
                         (onClick)="download(key.key)" />
             </div>
             <ol>
               @if (platform() === 'windows') {
-                <li>Apri PowerShell nella cartella in cui hai scaricato il file.</li>
+                <li>{{ 'hookKeys.openPowerShell' | transloco }}</li>
                 <li>
-                  Esegui:
+                  {{ 'hookKeys.run' | transloco }}
                   <code class="command">powershell -ExecutionPolicy Bypass -File .\{{ installer.fileName('windows') }}</code>
                 </li>
               } @else {
-                <li>Apri un terminale nella cartella in cui hai scaricato il file.</li>
+                <li>{{ 'hookKeys.openTerminal' | transloco }}</li>
                 <li>
-                  Esegui:
+                  {{ 'hookKeys.run' | transloco }}
                   <code class="command">bash {{ installer.fileName('unix') }}</code>
                 </li>
               }
-              <li>Elimina lo script: contiene la chiave in chiaro.</li>
-              <li>Apri una nuova sessione di Claude Code: la card compare nella dashboard.</li>
+              <li>{{ 'hookKeys.deleteScript' | transloco }}</li>
+              <li>{{ 'hookKeys.openSession' | transloco }}</li>
             </ol>
-            <p class="muted note">
-              @if (platform() === 'windows') {
-                Lo script modifica <code>%USERPROFILE%\.claude\settings.json</code> e ne lascia una copia
-                <code>settings.json.backup-data-ora</code> nella stessa cartella.
-              } @else {
-                Lo script richiede <code>python3</code>. Modifica <code>~/.claude/settings.json</code> e ne lascia
-                una copia <code>settings.json.backup-data-ora</code> nella stessa cartella.
-              }
-            </p>
+            <p class="muted note"
+               [innerHTML]="(platform() === 'windows' ? 'hookKeys.windowsNote' : 'hookKeys.unixNote') | transloco"></p>
           </div>
         </section>
       }
 
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
+      @if (error(); as error) {
+        <p class="error" role="alert">{{ error | transloco }}</p>
       }
 
       <ul class="list">
@@ -92,70 +80,64 @@ import { HookInstaller, InstallerPlatform, detectPlatform } from '../../core/hoo
               <strong>{{ key.name }}</strong>
               <code>{{ key.prefix }}…</code>
               <span class="muted">
-                creata il {{ key.createdAt | date: 'dd/MM/yyyy' }} ·
+                {{ 'hookKeys.createdOn' | transloco: { date: i18n.date(key.createdAt, 'date') } }} ·
                 @if (key.revokedAt) {
-                  revocata il {{ key.revokedAt | date: 'dd/MM/yyyy' }}
+                  {{ 'hookKeys.revokedOn' | transloco: { date: i18n.date(key.revokedAt, 'date') } }}
                 } @else if (key.lastUsedAt) {
-                  ultimo uso {{ key.lastUsedAt | date: 'dd/MM/yyyy HH:mm' }}
+                  {{ 'hookKeys.lastUsed' | transloco: { date: i18n.date(key.lastUsedAt, 'dateTime') } }}
                 } @else {
-                  mai usata
+                  {{ 'hookKeys.neverUsed' | transloco }}
                 }
               </span>
             </div>
             @if (!key.revokedAt) {
               @if (confirming() === key.id) {
                 <span class="buttons">
-                  <p-button label="Conferma revoca" size="small" severity="danger" (onClick)="revoke(key)" />
-                  <p-button label="Annulla" size="small" severity="secondary" (onClick)="confirming.set(null)" />
+                  <p-button [label]="'hookKeys.confirmRevoke' | transloco" size="small" severity="danger"
+                            (onClick)="revoke(key)" />
+                  <p-button [label]="'common.cancel' | transloco" size="small" severity="secondary"
+                            (onClick)="confirming.set(null)" />
                 </span>
               } @else {
-                <p-button label="Revoca" size="small" severity="danger" [outlined]="true"
+                <p-button [label]="'hookKeys.revoke' | transloco" size="small" severity="danger" [outlined]="true"
                           (onClick)="confirming.set(key.id)" />
               }
             }
           </li>
         } @empty {
-          <li class="muted">Nessuna chiave: creane una per collegare la prima macchina.</li>
+          <li class="muted">{{ 'hookKeys.empty' | transloco }}</li>
         }
       </ul>
 
       <section class="update">
-        <strong>Aggiornare l'hook su una macchina già collegata</strong>
-        <p class="muted">
-          Dopo un aggiornamento di Claude Monitor lo script dell'hook può cambiare. Per riscaricarlo esegui
-          questo comando sulla macchina: chiave e impostazioni restano quelle che ha già.
-        </p>
+        <strong>{{ 'hookKeys.updateTitle' | transloco }}</strong>
+        <p class="muted">{{ 'hookKeys.updateIntro' | transloco }}</p>
         <div class="download">
           <p-selectbutton [options]="platforms" optionLabel="label" optionValue="value" [allowEmpty]="false"
                           [ngModel]="platform()" (ngModelChange)="$event && platform.set($event)" size="small" />
-          <p-button [label]="updateCopied() ? 'Copiato' : 'Copia il comando'" icon="pi pi-copy" size="small"
+          <p-button [label]="(updateCopied() ? 'common.commandCopied' : 'common.copyCommand') | transloco"
+                    icon="pi pi-copy" size="small"
                     severity="secondary" (onClick)="copyUpdateCommand()" />
         </div>
         <code class="command">{{ installer.updateCommand(platform()) }}</code>
         <p class="muted note">
-          {{ platform() === 'windows' ? 'Da eseguire in PowerShell.' : 'Da eseguire in un terminale.' }}
-          Vale dal prossimo evento, anche per le sessioni già aperte.
+          {{ (platform() === 'windows' ? 'hookKeys.runInPowerShell' : 'hookKeys.runInTerminal') | transloco }}
+          {{ 'hookKeys.updateNote' | transloco }}
         </p>
       </section>
 
       <section class="update">
-        <strong>Focus delle finestre (solo macOS)</strong>
-        <p class="muted">
-          Facoltativo. Con questo comando il Mac avvia un piccolo agente che resta collegato alla dashboard:
-          sulle card delle sue sessioni compare un pulsante che porta in primo piano la finestra di Claude Code.
-          L'agente riceve solo l'identificativo della sessione: non esegue comandi e non invia tasti.
-        </p>
-        <p-button [label]="agentCopied() ? 'Copiato' : 'Copia il comando'" icon="pi pi-copy" size="small"
+        <strong>{{ 'hookKeys.focusTitle' | transloco }}</strong>
+        <p class="muted">{{ 'hookKeys.focusIntro' | transloco }}</p>
+        <p-button [label]="(agentCopied() ? 'common.commandCopied' : 'common.copyCommand') | transloco"
+                  icon="pi pi-copy" size="small"
                   severity="secondary" (onClick)="copyAgentCommand()" />
         <code class="command">{{ installer.agentCommand() }}</code>
-        <p class="muted note">
-          Da eseguire in un terminale del Mac, dopo aver aggiornato l'hook. Lo stesso comando aggiorna l'agente;
-          per toglierlo: <code>bash ~/.claude/hooks/claude-monitor-agent.sh uninstall</code>.
-        </p>
+        <p class="muted note" [innerHTML]="'hookKeys.focusNote' | transloco"></p>
       </section>
 
       <ng-template #footer>
-        <p-button label="Chiudi" (onClick)="closed.emit()" />
+        <p-button [label]="'common.close' | transloco" (onClick)="closed.emit()" />
       </ng-template>
     </p-dialog>
   `,
@@ -280,12 +262,13 @@ import { HookInstaller, InstallerPlatform, detectPlatform } from '../../core/hoo
 export class HookKeys implements OnInit {
   private readonly api = inject(AdminApi);
   protected readonly installer = inject(HookInstaller);
+  protected readonly i18n = inject(I18n);
 
   protected readonly platforms: { label: string; value: InstallerPlatform }[] = [
     { label: 'Linux / macOS', value: 'unix' },
     { label: 'Windows', value: 'windows' },
   ];
-  /** Proposta in base al browser in uso; si può cambiare se la chiave serve a un'altra macchina. */
+  /** Suggested from the current browser; it can be changed when the key is for another machine. */
   protected readonly platform = signal<InstallerPlatform>(detectPlatform());
   protected readonly downloading = signal(false);
 
@@ -299,6 +282,7 @@ export class HookKeys implements OnInit {
   protected readonly agentCopied = signal(false);
   protected readonly confirming = signal<number | null>(null);
   protected readonly busy = signal(false);
+  /** Translation key of the last error. */
   protected readonly error = signal<string | null>(null);
 
   ngOnInit(): void {
@@ -318,7 +302,7 @@ export class HookKeys implements OnInit {
       this.name.set('');
       await this.reload();
     } catch {
-      this.error.set('Creazione non riuscita.');
+      this.error.set('hookKeys.createFailed');
     } finally {
       this.busy.set(false);
     }
@@ -329,7 +313,7 @@ export class HookKeys implements OnInit {
       await navigator.clipboard.writeText(key);
       this.copied.set(true);
     } catch {
-      this.error.set('Copia non riuscita: seleziona la chiave e copiala a mano.');
+      this.error.set('hookKeys.copyKeyFailed');
     }
   }
 
@@ -339,7 +323,7 @@ export class HookKeys implements OnInit {
       this.updateCopied.set(true);
       setTimeout(() => this.updateCopied.set(false), 3_000);
     } catch {
-      this.error.set('Copia non riuscita: seleziona il comando e copialo a mano.');
+      this.error.set('hookKeys.copyCommandFailed');
     }
   }
 
@@ -349,7 +333,7 @@ export class HookKeys implements OnInit {
       this.agentCopied.set(true);
       setTimeout(() => this.agentCopied.set(false), 3_000);
     } catch {
-      this.error.set('Copia non riuscita: seleziona il comando e copialo a mano.');
+      this.error.set('hookKeys.copyCommandFailed');
     }
   }
 
@@ -359,7 +343,7 @@ export class HookKeys implements OnInit {
     try {
       await this.installer.download(this.platform(), key);
     } catch {
-      this.error.set('Script di installazione non disponibile: usa la chiave con l\'installazione manuale.');
+      this.error.set('hookKeys.downloadFailed');
     } finally {
       this.downloading.set(false);
     }
@@ -372,7 +356,7 @@ export class HookKeys implements OnInit {
       this.confirming.set(null);
       await this.reload();
     } catch {
-      this.error.set('Revoca non riuscita.');
+      this.error.set('hookKeys.revokeFailed');
     }
   }
 
@@ -380,7 +364,7 @@ export class HookKeys implements OnInit {
     try {
       this.keys.set(await this.api.hookKeys());
     } catch {
-      this.error.set('Elenco delle chiavi non disponibile.');
+      this.error.set('hookKeys.listUnavailable');
     }
   }
 }

@@ -26,7 +26,7 @@ public class SessionController {
         this.sessionService = sessionService;
     }
 
-    /** Elenco sessioni, con filtri opzionali per stato e macchina. */
+    /** Session list, with optional filters by status and machine. */
     @GetMapping
     public List<SessionDto> list(@AuthenticationPrincipal AuthUser user,
                                  @RequestParam(required = false) SessionStatus status,
@@ -35,13 +35,13 @@ public class SessionController {
         return sessionService.list(user.id(), status, machine, includeHistory);
     }
 
-    /** Cronologia eventi della sessione, dal più recente. */
+    /** The session's event history, most recent first. */
     @GetMapping("/{id}/events")
     public List<EventDto> events(@AuthenticationPrincipal AuthUser user, @PathVariable String id) {
         return sessionService.eventsOf(user.id(), id).orElseThrow(SessionController::notFound);
     }
 
-    /** Segna come vista o archivia la sessione. */
+    /** Marks the session as seen or archives it. */
     @PatchMapping("/{id}")
     public SessionDto update(@AuthenticationPrincipal AuthUser user, @PathVariable String id,
                              @RequestBody UpdateRequest request) {
@@ -50,7 +50,7 @@ public class SessionController {
     }
 
     private static ResponseStatusException notFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Sessione non trovata");
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found");
     }
 
     public record UpdateRequest(Boolean seen, Boolean archived) {

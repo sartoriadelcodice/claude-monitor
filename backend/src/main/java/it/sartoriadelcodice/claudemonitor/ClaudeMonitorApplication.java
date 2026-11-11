@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-// Nessun utente in memoria: l'autenticazione passa solo da AuthFilter
+// No in-memory users: authentication goes through AuthFilter only
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 @ConfigurationPropertiesScan
 @EnableScheduling
@@ -21,7 +21,7 @@ public class ClaudeMonitorApplication {
         SpringApplication.run(ClaudeMonitorApplication.class, args);
     }
 
-    /** Orologio iniettabile, così i test possono controllare il tempo. */
+    /** Injectable clock, so tests can control time. */
     @Bean
     Clock clock() {
         return Clock.systemUTC();

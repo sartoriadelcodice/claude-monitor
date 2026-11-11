@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** Chiave hook di un utente. Si conserva solo l'hash: la chiave in chiaro non è ricostruibile. */
+/** A user's hook key. Only the hash is stored: the plain key cannot be recovered. */
 @Entity
 @Table(name = "hook_keys")
 public class HookKey {
@@ -27,12 +27,12 @@ public class HookKey {
     @Column(nullable = false)
     private String name;
 
-    // La colonna è CHAR(64): va dichiarato a Hibernate, che per le stringhe si aspetta VARCHAR
+    // The column is CHAR(64): Hibernate must be told, since it expects VARCHAR for strings
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "key_hash", nullable = false, unique = true, length = 64)
     private String keyHash;
 
-    /** Primi caratteri della chiave, per riconoscerla nell'elenco. */
+    /** First characters of the key, to recognize it in the list. */
     @Column(name = "key_prefix", nullable = false)
     private String keyPrefix;
 

@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Controllo periodico delle sessioni senza eventi recenti. */
+/** Periodic check of sessions without recent events. */
 @Component
 public class StaleSessionJob {
 
@@ -21,7 +21,7 @@ public class StaleSessionJob {
     public void run() {
         int marked = sessionService.markStaleSessions();
         if (marked > 0) {
-            log.info("Sessioni marcate STALE: {}", marked);
+            log.info("Sessions marked STALE: {}", marked);
         }
     }
 }

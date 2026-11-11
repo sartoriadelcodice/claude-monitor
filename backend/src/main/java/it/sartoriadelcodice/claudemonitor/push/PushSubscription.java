@@ -9,7 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Subscription Web Push di un dispositivo. */
+/** A device's Web Push subscription. */
 @Entity
 @Table(name = "push_subscriptions")
 public class PushSubscription {
@@ -33,6 +33,10 @@ public class PushSubscription {
     @Column(name = "user_agent")
     private String userAgent;
 
+    /** Language of the notifications on this device, one of {@link PushNotifier#LANGUAGES}. */
+    @Column(nullable = false, length = 10)
+    private String language;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -40,21 +44,23 @@ public class PushSubscription {
     }
 
     public PushSubscription(Long userId, String endpoint, String p256dh, String auth, String userAgent,
-                            Instant createdAt) {
+                            String language, Instant createdAt) {
         this.userId = userId;
         this.endpoint = endpoint;
         this.p256dh = p256dh;
         this.auth = auth;
         this.userAgent = userAgent;
+        this.language = language;
         this.createdAt = createdAt;
     }
 
-    /** Aggiorna le chiavi; il dispositivo passa all'utente che si è appena registrato. */
-    public void update(Long userId, String p256dh, String auth, String userAgent) {
+    /** Updates keys and language; the device passes to the user who has just subscribed. */
+    public void update(Long userId, String p256dh, String auth, String userAgent, String language) {
         this.userId = userId;
         this.p256dh = p256dh;
         this.auth = auth;
         this.userAgent = userAgent;
+        this.language = language;
     }
 
     public Long getId() {
@@ -71,5 +77,9 @@ public class PushSubscription {
 
     public String getAuth() {
         return auth;
+    }
+
+    public String getLanguage() {
+        return language;
     }
 }

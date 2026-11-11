@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-/** Emissione e verifica dei JWT usati dal frontend. */
+/** Issues and verifies the JWTs used by the frontend. */
 @Service
 public class JwtService {
 
@@ -33,8 +33,8 @@ public class JwtService {
         this.clock = clock;
         String secret = properties.auth().jwtSecret();
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
-            // Senza un segreto valido si usa una chiave casuale: i token decadono a ogni riavvio
-            log.warn("JWT_SECRET assente o più corto di 32 byte: uso una chiave casuale valida fino al riavvio");
+            // Without a valid secret a random key is used: tokens become invalid at every restart
+            log.warn("JWT_SECRET missing or shorter than 32 bytes: using a random key valid until restart");
             this.key = Jwts.SIG.HS256.key().build();
         } else {
             this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
@@ -53,7 +53,7 @@ public class JwtService {
         return new IssuedToken(token, expiresAt);
     }
 
-    /** Restituisce l'id utente del token se firma e scadenza sono valide. */
+    /** Returns the token's user id if signature and expiration are valid. */
     public Optional<Long> verify(String token) {
         try {
             Claims claims = Jwts.parser()

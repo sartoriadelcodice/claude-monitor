@@ -1,8 +1,8 @@
-// Valori inseriti nel bundle con --define: identificativo di build e chiave di licenza PrimeUI.
+// Values embedded in the bundle with --define: build id and PrimeUI license key.
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** Identificativo di build: data e ora UTC. */
+/** Build id: UTC date and time. */
 function buildId() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
@@ -12,7 +12,7 @@ function buildId() {
   );
 }
 
-/** Chiave PrimeUI: dalla variabile PRIMENG_LICENSE oppure, in locale, dal file .env nella radice. */
+/** PrimeUI key: from the PRIMENG_LICENSE variable or, locally, from the .env file in the repository root. */
 function primengLicense() {
   if (process.env.PRIMENG_LICENSE) {
     return process.env.PRIMENG_LICENSE.trim();
@@ -29,11 +29,11 @@ function primengLicense() {
   return '';
 }
 
-/** Argomenti --define per ng build e ng serve. */
+/** --define arguments for ng build and ng serve. */
 export function defineArgs({ withBuildId = true } = {}) {
   const license = primengLicense();
   if (!license) {
-    console.warn('PRIMENG_LICENSE non impostata: PrimeNG mostrerà l\'avviso di licenza mancante.');
+    console.warn('PRIMENG_LICENSE not set: PrimeNG will show the missing license notice.');
   }
   const args = ['--define', `PRIMENG_LICENSE_KEY=${JSON.stringify(license)}`];
   if (withBuildId) {

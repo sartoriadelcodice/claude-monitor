@@ -11,7 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Utente della dashboard. */
+/** Dashboard user. */
 @Entity
 @Table(name = "users")
 public class User {
@@ -33,7 +33,7 @@ public class User {
     @Column(nullable = false)
     private boolean enabled = true;
 
-    /** Interruttore del focus delle finestre: spento, vale per tutte le macchine e le sessioni dell'utente. */
+    /** Window focus switch: when off, it applies to all of the user's machines and sessions. */
     @Column(name = "focus_enabled", nullable = false)
     private boolean focusEnabled = true;
 

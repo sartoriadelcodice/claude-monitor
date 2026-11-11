@@ -4,15 +4,23 @@ import { firstValueFrom } from 'rxjs';
 
 import { AudioService } from './audio.service';
 import { AuthService } from './auth.service';
-import { STATUS_META, Session, SessionEvent, SessionStatus, requiresAttention } from './models';
+import {
+  FocusAgent,
+  FocusResult,
+  STATUS_META,
+  Session,
+  SessionEvent,
+  SessionStatus,
+  requiresAttention,
+} from './models';
 import { SettingsService } from './settings.service';
 
-/** Senza dati (heartbeat compresi) per questo tempo la connessione SSE è considerata morta. */
+/** With no data (heartbeats included) for this long, the SSE connection is considered dead. */
 const STREAM_SILENCE_MS = 50_000;
-/** Riallineamento periodico con il server: fa sparire le ENDED scadute e copre eventi persi. */
+/** Periodic realignment with the server: removes expired ENDED sessions and covers lost events. */
 const RELOAD_MS = 60_000;
 
-/** Stato delle sessioni: caricamento, aggiornamenti in tempo reale e avvisi sonori. */
+/** Session state: loading, real-time updates and sound alerts. */
 @Injectable({ providedIn: 'root' })
 export class SessionStore {
   private readonly http = inject(HttpClient);
@@ -23,12 +31,18 @@ export class SessionStore {
   readonly sessions = signal<Session[]>([]);
   readonly connected = signal(false);
   readonly includeHistory = signal(false);
-  /** Macchine su cui un agente può portare in primo piano la finestra di una sessione. */
-  readonly focusMachines = signal<ReadonlySet<string>>(new Set());
-  /** Orologio aggiornato periodicamente, per i tempi mostrati sulle card. */
+  /** Machines with the window focus agent connected. */
+  readonly focusAgents = signal<readonly FocusAgent[]>([]);
+  /** Machines where an agent can bring a session window to the front. */
+  readonly focusMachines = computed<ReadonlySet<string>>(() => new Set(this.focusAgents().map((a) => a.machine)));
+  /** Machines where the agent can open Remote Control sessions in the Claude app. */
+  readonly claudeAppMachines = computed<ReadonlySet<string>>(
+    () => new Set(this.focusAgents().filter((a) => a.claudeApp).map((a) => a.machine)),
+  );
+  /** Clock updated periodically, for the times shown on the cards. */
   readonly now = signal(Date.now());
 
-  /** Sessioni ordinate: prima quelle che richiedono attenzione, poi per stato e anzianità. */
+  /** Sorted sessions: those that need attention first, then by state and age. */
   readonly sorted = computed(() =>
     [...this.sessions()].sort(
       (a, b) =>
@@ -41,11 +55,11 @@ export class SessionStore {
     () => this.sessions().filter((s) => !s.archived && requiresAttention(s.status)).length,
   );
 
-  /** Sessioni la cui card è ingrandita in questo momento (impostazione "zoomEnabled"). */
+  /** Sessions whose card is currently enlarged ("zoomEnabled" setting). */
   readonly zoomed = signal<ReadonlySet<string>>(new Set());
   private readonly zoomTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  /** Ultimo stato noto per sessione: serve a riconoscere le transizioni. */
+  /** Last known state per session: used to detect transitions. */
   private readonly knownStatus = new Map<string, SessionStatus>();
   private firstLoadDone = false;
   private started = false;
@@ -55,11 +69,11 @@ export class SessionStore {
 
   private readonly onVisibility = () => {
     if (document.visibilityState === 'visible') {
-      // Ritorno in primo piano: si riattiva l'audio e si ricontrolla lo stato
+      // Back in the foreground: resume audio and check the state again
       void this.audio.resumeIfSuspended();
       this.now.set(Date.now());
       void this.load();
-      // iPadOS congela la PWA in background: la connessione va rifatta
+      // iPadOS freezes the PWA in the background: the connection must be reopened
       this.abort?.abort();
     }
   };
@@ -91,7 +105,7 @@ export class SessionStore {
     this.zoomed.set(new Set());
     this.firstLoadDone = false;
     this.sessions.set([]);
-    this.focusMachines.set(new Set());
+    this.focusAgents.set([]);
   }
 
   setIncludeHistory(value: boolean): void {
@@ -107,7 +121,7 @@ export class SessionStore {
           params: { includeHistory: this.includeHistory() },
         }),
       );
-      // Al primo caricamento nessun suono: si avvisa solo sulle transizioni successive
+      // No sound on the first load: only later transitions trigger alerts
       const silent = !this.firstLoadDone;
       list.forEach((session) => this.trackTransition(session, silent));
       const ids = new Set(list.map((s) => s.id));
@@ -115,25 +129,27 @@ export class SessionStore {
       this.firstLoadDone = true;
       this.sessions.set(list);
     } catch {
-      // Errore di rete: si ritenta al prossimo giro (il 401 è gestito dall'interceptor)
+      // Network error: retry next round (401 is handled by the interceptor)
     }
   }
 
   /**
-   * Chiede alla macchina della sessione di portare in primo piano la finestra che la ospita.
-   * Restituisce false se la richiesta non arriva a un agente (macchina spenta o agente non attivo).
+   * Brings the session to the front on the Mac in use: its window, or the Claude app of another Mac when the
+   * session is under Remote Control. The server makes the choice. Returns where it was opened, or null when
+   * the request does not reach an agent (machine off or agent not running).
    */
-  async focus(session: Session): Promise<boolean> {
+  async focus(session: Session): Promise<FocusResult | null> {
     try {
-      await firstValueFrom(this.http.post(`api/sessions/${encodeURIComponent(session.id)}/focus`, null));
-      return true;
+      return await firstValueFrom(
+        this.http.post<FocusResult>(`api/sessions/${encodeURIComponent(session.id)}/focus`, null),
+      );
     } catch {
       void this.loadFocusMachines();
-      return false;
+      return null;
     }
   }
 
-  /** Interruttore del focus dell'utente; null se il server non risponde. */
+  /** The user's window focus switch; null if the server does not answer. */
   async focusEnabled(): Promise<boolean | null> {
     try {
       return (await firstValueFrom(this.http.get<{ enabled: boolean }>('api/focus/settings'))).enabled;
@@ -143,25 +159,24 @@ export class SessionStore {
   }
 
   /**
-   * Accende o spegne il focus per tutte le macchine e le sessioni dell'utente. Allo spegnimento il server
-   * scollega gli agenti: i pulsanti spariscono subito dalle card. Restituisce lo stato salvato.
+   * Turns window focus on or off for all the user's machines and sessions. When it is turned off the server
+   * disconnects the agents: the buttons disappear from the cards right away. Returns the saved state.
    */
   async setFocusEnabled(enabled: boolean): Promise<boolean> {
     const saved = await firstValueFrom(this.http.put<{ enabled: boolean }>('api/focus/settings', { enabled }));
     if (!saved.enabled) {
-      this.focusMachines.set(new Set());
+      this.focusAgents.set([]);
     }
     void this.loadFocusMachines();
     return saved.enabled;
   }
 
-  /** Macchine con l'agente collegato: solo sulle loro card compare il pulsante del focus. */
+  /** Machines with the agent connected: they decide which cards show the focus button. */
   private async loadFocusMachines(): Promise<void> {
     try {
-      const machines = await firstValueFrom(this.http.get<string[]>('api/focus/machines'));
-      this.focusMachines.set(new Set(machines));
+      this.focusAgents.set(await firstValueFrom(this.http.get<FocusAgent[]>('api/focus/agents')));
     } catch {
-      // Errore di rete: resta l'elenco precedente fino al prossimo giro
+      // Network error: keep the previous list until the next round
     }
   }
 
@@ -184,7 +199,7 @@ export class SessionStore {
     this.apply(updated);
   }
 
-  /** Applica un aggiornamento arrivato via SSE o come risposta a una modifica. */
+  /** Applies an update received via SSE or as the response to a change. */
   private apply(session: Session): void {
     this.trackTransition(session, false);
     const hidden = session.archived && !this.includeHistory();
@@ -197,7 +212,7 @@ export class SessionStore {
   private trackTransition(session: Session, silent: boolean): void {
     const previous = this.knownStatus.get(session.id);
     this.knownStatus.set(session.id, session.status);
-    // Il suono parte solo quando lo stato cambia, non a ogni aggiornamento
+    // The sound plays only when the state changes, not on every update
     if (!silent && !session.archived && previous !== session.status && requiresAttention(session.status)) {
       if (session.status === 'NEEDS_ATTENTION') {
         this.lastAttentionSound = Date.now();
@@ -207,7 +222,7 @@ export class SessionStore {
     }
   }
 
-  /** Ingrandisce la card per i secondi impostati; una nuova transizione fa ripartire il conteggio. */
+  /** Enlarges the card for the configured seconds; a new transition restarts the countdown. */
   private zoom(id: string): void {
     const settings = this.settingsService.settings();
     if (!settings.zoomEnabled || settings.zoomSeconds <= 0) {
@@ -228,7 +243,7 @@ export class SessionStore {
     );
   }
 
-  /** Ripete il suono finché c'è una sessione NEEDS_ATTENTION non ancora vista. */
+  /** Repeats the sound while there is a NEEDS_ATTENTION session not yet seen. */
   private repeatAttentionSound(): void {
     const settings = this.settingsService.settings();
     if (!settings.repeatEnabled || settings.repeatSeconds <= 0) {
@@ -241,19 +256,19 @@ export class SessionStore {
     }
   }
 
-  /** Mantiene aperta la connessione SSE, riconnettendosi con attesa crescente. */
+  /** Keeps the SSE connection open, reconnecting with increasing delays. */
   private async runStream(): Promise<void> {
     let delay = 1_000;
     while (this.started) {
       const abort = new AbortController();
       this.abort = abort;
       try {
-        // EventSource non permette header: si usa fetch in streaming con il JWT
+        // EventSource does not allow headers: use streaming fetch with the JWT
         const response = await fetch('api/stream', {
           headers: {
             Authorization: `Bearer ${this.auth.token() ?? ''}`,
             Accept: 'text/event-stream',
-            // Evita che il service worker di Angular intercetti lo stream
+            // Prevents the Angular service worker from intercepting the stream
             'ngsw-bypass': 'true',
           },
           cache: 'no-store',
@@ -264,15 +279,15 @@ export class SessionStore {
           return;
         }
         if (!response.ok || !response.body) {
-          throw new Error(`Stream non disponibile: ${response.status}`);
+          throw new Error(`Stream unavailable: ${response.status}`);
         }
         this.connected.set(true);
         delay = 1_000;
-        // A ogni (ri)connessione si riallinea l'elenco: copre gli eventi persi nel frattempo
+        // On every (re)connection the list is realigned: it covers the events lost meanwhile
         void this.load();
         await this.readStream(response.body, abort);
       } catch {
-        // Connessione caduta o annullata: si riprova sotto
+        // Connection dropped or aborted: retry below
       }
       this.connected.set(false);
       if (!this.started) {
@@ -328,7 +343,7 @@ export class SessionStore {
     try {
       this.apply(JSON.parse(data.join('\n')) as Session);
     } catch {
-      // Blocco non valido: ignorato
+      // Invalid block: ignored
     }
   }
 }

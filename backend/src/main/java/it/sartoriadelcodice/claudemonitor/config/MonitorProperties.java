@@ -5,9 +5,9 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configurazione applicativa, valorizzata da variabili d'ambiente (vedi application.yml).
- * hookToken è il vecchio token condiviso: se presente viene importato all'avvio come chiave hook
- * dell'amministratore iniziale. Le credenziali in auth servono solo a creare quell'amministratore.
+ * Application configuration, populated from environment variables (see application.yml).
+ * hookToken is the old shared token: if present, it is imported at startup as a hook key of the
+ * initial administrator. The credentials in auth are only used to create that administrator.
  */
 @ConfigurationProperties(prefix = "monitor")
 public record MonitorProperties(String hookToken, Auth auth, Sessions sessions, Push push) {

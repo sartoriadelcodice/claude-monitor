@@ -40,7 +40,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Test dell'endpoint POST /api/events: autenticazione, validazione e lettura del payload. */
+/** Tests for the POST /api/events endpoint: authentication, validation and payload parsing. */
 @WebMvcTest(EventController.class)
 @Import({SecurityConfig.class, AuthFilter.class, JwtService.class})
 @EnableConfigurationProperties(MonitorProperties.class)
@@ -93,7 +93,7 @@ class EventControllerTest {
         Instant now = Instant.parse("2026-11-10T10:00:00Z");
         return new SessionDto("abc123", "macbook", "my-project", "/home/user/my-project", null, null,
                 SessionStatus.NEEDS_ATTENTION, now, now, "Claude needs your permission", "permission_prompt",
-                null, false, now);
+                null, false, now, null);
     }
 
     @Test
@@ -114,7 +114,7 @@ class EventControllerTest {
 
     @Test
     void rejectsFrontendJwt() throws Exception {
-        // Il JWT del frontend non autorizza l'invio di eventi
+        // The frontend JWT does not authorize sending events
         String jwt = jwtService.issue(USER_ID).token();
         mockMvc.perform(post("/api/events")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt)
@@ -160,7 +160,7 @@ class EventControllerTest {
         ArgumentCaptor<HookEvent> captor = ArgumentCaptor.forClass(HookEvent.class);
         verify(sessionService).handleEvent(eq(USER_ID), captor.capture());
         assertThat(captor.getValue().project()).isEqualTo("demo-app");
-        assertThat(captor.getValue().machine()).isEqualTo("sconosciuta");
+        assertThat(captor.getValue().machine()).isEqualTo("unknown");
     }
 
     @Test
@@ -206,7 +206,7 @@ class EventControllerTest {
         mockMvc.perform(post("/api/events")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + HOOK_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("non-json"))
+                        .content("not-json"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(sessionService);
     }
