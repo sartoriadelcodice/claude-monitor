@@ -5,16 +5,25 @@
 # ~/.claude/claude-monitor/windows/<session_id>: dal backend arriva solo l'identificativo della sessione,
 # quindi il server non può far aprire nient'altro.
 #
+#
+# Controllo remoto (Remote Control di Claude Code): se la sessione di un'altra macchina è seguibile in remoto,
+# il backend chiede a tutti gli agenti da quanti secondi non si usano tastiera e mouse ("probe") e sceglie il
+# Mac usato per ultimo. Se non è quello della sessione, il suo agente riceve l'identificativo del controllo
+# remoto (session_...) e apre la sessione nell'app Claude con il link claude://code/<identificativo>.
+# L'agente risponde alle richieste di inattività solo con un numero di secondi, e solo quando il backend lo chiede.
+#
 # Limiti voluti: l'agente non esegue comandi ricevuti dalla rete, non invia tasti e non usa i permessi di
-# Accessibilità. Sa solo selezionare una scheda di Terminale o iTerm e portare avanti un'applicazione.
+# Accessibilità. Sa solo selezionare una scheda di Terminale o iTerm, portare avanti un'applicazione e aprire
+# nell'app Claude un link che compone da sé con un identificativo controllato.
 # Va attivato a mano su ogni Mac ("install"): l'installazione dell'hook non lo avvia.
 #
 # Protezioni contro un server difettoso o compromesso:
 #   - si collega solo in https (http è ammesso soltanto verso questa stessa macchina);
 #   - ogni richiesta anomala vale dei punti: identificativo malformato (blocco immediato), sessione che
-#     questo Mac non conosce, richieste troppo ravvicinate. Raggiunta la soglia in dieci minuti, o superato
-#     il numero massimo di focus in un'ora, l'agente si blocca: si scollega, avvisa con una notifica e non
-#     esegue più nulla finché sul Mac non si lancia "unlock". Il blocco non si toglie dalla rete.
+#     questo Mac non conosce, sessione remota senza l'app Claude, richieste troppo ravvicinate. Raggiunta la
+#     soglia in dieci minuti, o superato il numero massimo di focus o di richieste di inattività in un'ora,
+#     l'agente si blocca: si scollega, avvisa con una notifica e non esegue più nulla finché sul Mac non si
+#     lancia "unlock". Il blocco non si toglie dalla rete.
 #   - l'interruttore nelle impostazioni della dashboard spegne il focus per tutte le macchine dell'utente:
 #     il backend scollega l'agente e ne rifiuta i nuovi collegamenti.
 #
@@ -23,6 +32,8 @@
 #   claude-monitor-agent.sh uninstall   lo ferma e lo rimuove
 #   claude-monitor-agent.sh run         resta in ascolto (è il comando eseguito da launchd)
 #   claude-monitor-agent.sh focus ID    porta in primo piano la finestra di una sessione, per prova
+#   claude-monitor-agent.sh remote ID   apre nell'app Claude una sessione in controllo remoto (session_...), per prova
+#   claude-monitor-agent.sh idle        secondi dall'ultimo uso di tastiera e mouse, come li riceve il backend
 #   claude-monitor-agent.sh status      dice se l'agente è registrato e se è bloccato
 #   claude-monitor-agent.sh unlock      toglie il blocco scattato per richieste anomale
 #
@@ -36,14 +47,18 @@ plist_file="$HOME/Library/LaunchAgents/$label.plist"
 log_file="$HOME/Library/Logs/claude-monitor-agent.log"
 # Presente quando l'agente si è bloccato per richieste anomale: si toglie solo da questo Mac
 lock_file="$HOME/.claude/claude-monitor/agent.locked"
+# App Claude per macOS: apre le sessioni in controllo remoto con i link claude://
+claude_bundle="com.anthropic.claudefordesktop"
 
 # Soglie delle protezioni
 suspect_limit=10       # punti di sospetto che fanno scattare il blocco
 suspect_window=600     # secondi entro cui i punti si sommano
 hourly_limit=60        # focus eseguiti in un'ora oltre i quali l'agente si blocca
+probe_hourly_limit=120 # richieste di inattività in un'ora oltre le quali l'agente si blocca
 min_interval=2         # secondi minimi tra due focus
 suspects=()            # richieste sospette recenti, come "istante:punti"
 executed=()            # istanti dei focus eseguiti nell'ultima ora
+probed=()              # istanti delle richieste di inattività dell'ultima ora
 
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -153,6 +168,99 @@ count_executed() {
   if [ "${#executed[@]}" -gt "$hourly_limit" ]; then
     lock_agent "più di $hourly_limit focus in un'ora"
   fi
+}
+
+# Conta le richieste di inattività dell'ultima ora. Il backend ne manda una per tocco su "Apri finestra":
+# oltre la soglia qualcuno sta sorvegliando l'uso del Mac, e l'agente si blocca.
+# Esce con 1 se la richiesta arriva a meno di un secondo dalla precedente o se è scattato il blocco.
+count_probe() {
+  local now cutoff entry kept=() last=0
+  now="$(date +%s)"
+  cutoff=$((now - 3600))
+  [ "${#probed[@]}" -gt 0 ] && last="${probed[${#probed[@]}-1]}"
+  probed+=("$now")
+  for entry in "${probed[@]}"; do
+    if [ "$entry" -ge "$cutoff" ]; then
+      kept+=("$entry")
+    fi
+  done
+  probed=("${kept[@]}")
+  if [ "${#probed[@]}" -gt "$probe_hourly_limit" ]; then
+    lock_agent "più di $probe_hourly_limit richieste di inattività in un'ora"
+    return 1
+  fi
+  if [ $((now - last)) -lt 1 ]; then
+    suspect 1 "richieste di inattività troppo ravvicinate"
+    return 1
+  fi
+}
+
+# Secondi trascorsi dall'ultimo uso di tastiera, mouse o trackpad di questo Mac
+idle_seconds() {
+  ioreg -c IOHIDSystem -d 4 -r -k HIDIdleTime 2>/dev/null |
+    awk '/"HIDIdleTime"/ { printf "%d\n", $NF / 1000000000; exit }'
+}
+
+# App Claude installata: solo allora l'agente sa aprire le sessioni in controllo remoto
+claude_app_installed() {
+  local app
+  for app in /Applications/Claude.app "$HOME/Applications/Claude.app"; do
+    if [ "$(plutil -extract CFBundleIdentifier raw -o - "$app/Contents/Info.plist" 2>/dev/null)" = "$claude_bundle" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Risponde a una richiesta del backend con i secondi di inattività di questo Mac: non invia altro.
+# Esce con 2 se l'identificativo della richiesta è malformato.
+answer_probe() {
+  local probe="$1" url="$2" token="$3" machine="$4" idle
+  # Il backend genera 32 cifre esadecimali: altro non arriva da un server sano
+  case "$probe" in '' | *[!0-9a-f]*) return 2 ;; esac
+  [ "${#probe}" -eq 32 ] || return 2
+  idle="$(idle_seconds)"
+  case "$idle" in '' | *[!0-9]*)
+    log "tempo di inattività non disponibile"
+    return 0
+    ;;
+  esac
+  # La chiave passa da stdin e non dalla riga di comando, dove la vedrebbero gli altri processi
+  curl --config - --silent --max-time 5 --request POST \
+    --data-urlencode "probe=$probe" --data-urlencode "machine=$machine" --data-urlencode "idle=$idle" \
+    "${url%/}/api/agent/activity" >/dev/null 2>&1 <<EOF
+header = "Authorization: Bearer $token"
+EOF
+  return 0
+}
+
+# Apre nell'app Claude la sessione in controllo remoto di un'altra macchina. Il link lo compone l'agente:
+# dal backend arriva solo l'identificativo, controllato prima dell'uso.
+# Esce con 2 se l'identificativo è malformato e con 3 se su questo Mac non c'è l'app Claude.
+open_remote() {
+  local id="$1"
+  # Forma degli identificativi di Claude Code: session_ o cse_ seguito da lettere, cifre, "_" e "-".
+  # Il valore non si scrive nel registro se non è valido, per non farci finire testo scelto da chi lo ha inviato.
+  case "$id" in session_?* | cse_?*) ;; *)
+    log "identificativo di sessione remota malformato (${#id} caratteri)"
+    return 2
+    ;;
+  esac
+  case "${id#*_}" in *[!A-Za-z0-9_-]*)
+    log "identificativo di sessione remota malformato (${#id} caratteri)"
+    return 2
+    ;;
+  esac
+  if [ "${#id}" -gt 100 ]; then
+    log "identificativo di sessione remota troppo lungo (${#id} caratteri)"
+    return 2
+  fi
+  if ! claude_app_installed; then
+    log "sessione remota $id: app Claude non installata su questo Mac"
+    return 3
+  fi
+  log "sessione remota $id: app Claude"
+  open -b "$claude_bundle" "claude://code/$id"
 }
 
 # Porta in primo piano la finestra della sessione. I valori letti dal file sono ricontrollati prima dell'uso.
@@ -307,7 +415,7 @@ unlock_agent() {
 
 run_agent() {
   local fifo_dir fifo curl_pid="" url token machine line event data connected delay=2 now last_focus=0
-  local locked_logged=0 refused_logged=0
+  local locked_logged=0 refused_logged=0 claude_app
   fifo_dir="$(mktemp -d "${TMPDIR:-/tmp}/claude-monitor-agent.XXXXXX")" || exit 1
   fifo="$fifo_dir/stream"
   mkfifo "$fifo" || exit 1
@@ -352,10 +460,17 @@ run_agent() {
     esac
     # Le sessioni chiuse male lasciano il file della finestra: si eliminano quelli vecchi
     find "$windows_dir" -type f -mtime +30 -delete 2>/dev/null
+    # Con l'app Claude il backend può mandare qui le sessioni in controllo remoto delle altre macchine
+    if claude_app_installed; then
+      claude_app=true
+    else
+      claude_app=false
+    fi
 
     # La chiave passa da stdin e non dalla riga di comando, dove la vedrebbero gli altri processi
     curl --config - --silent --fail --no-buffer --connect-timeout 10 \
-      --get --data-urlencode "machine=$machine" "${url%/}/api/agent/stream" >"$fifo" 2>/dev/null <<EOF &
+      --get --data-urlencode "machine=$machine" --data-urlencode "claudeApp=$claude_app" \
+      "${url%/}/api/agent/stream" >"$fifo" 2>/dev/null <<EOF &
 header = "Authorization: Bearer $token"
 header = "Accept: text/event-stream"
 EOF
@@ -370,7 +485,7 @@ EOF
         connected=1
         delay=2
         refused_logged=0
-        log "collegato a $url come $machine"
+        log "collegato a $url come $machine (app Claude: $claude_app)"
       fi
       case "$line" in
         event:*)
@@ -380,19 +495,28 @@ EOF
         data:*)
           data="${line#data:}"
           data="${data# }"
-          if [ "$event" = "focus" ]; then
+          if [ "$event" = "focus" ] || [ "$event" = "remote" ]; then
             now="$(date +%s)"
             if [ $((now - last_focus)) -lt "$min_interval" ]; then
               # Un server sano non manda richieste a raffica: la dashboard ne invia una per tocco
               suspect 1 "richieste troppo ravvicinate"
             else
               last_focus="$now"
-              focus_session "$data"
+              if [ "$event" = "focus" ]; then
+                focus_session "$data"
+              else
+                open_remote "$data"
+              fi
               case "$?" in
                 0) count_executed ;;
                 2) suspect "$suspect_limit" "identificativo malformato" ;;
-                3) suspect 1 "sessione sconosciuta su questo Mac" ;;
+                3) suspect 1 "sessione sconosciuta su questo Mac o app Claude assente" ;;
               esac
+            fi
+          elif [ "$event" = "probe" ]; then
+            if count_probe; then
+              answer_probe "$data" "$url" "$token" "$machine" ||
+                suspect "$suspect_limit" "identificativo di richiesta malformato"
             fi
           elif [ "$event" = "disabled" ]; then
             log "focus disattivato dalle impostazioni della dashboard"
@@ -425,10 +549,12 @@ case "${1:-run}" in
   uninstall) uninstall_agent ;;
   run) run_agent ;;
   focus) focus_session "${2:-}" ;;
+  remote) open_remote "${2:-}" ;;
+  idle) idle_seconds ;;
   status) agent_status ;;
   unlock) unlock_agent ;;
   *)
-    echo "Uso: $0 install | uninstall | run | focus <session_id> | status | unlock" >&2
+    echo "Uso: $0 install | uninstall | run | focus <session_id> | remote <session_...> | idle | status | unlock" >&2
     exit 2
     ;;
 esac

@@ -78,6 +78,8 @@ public class SessionService {
         if (event.model() != null) {
             session.setModel(event.model());
         }
+        // Ogni evento porta lo stato attuale del controllo remoto: se manca, è stato spento
+        session.setRemoteSessionId(event.remoteSessionId());
 
         boolean statusChanged = mapper.map(event.eventName(), event.notificationType(), event.source(),
                         event.backgroundWork(), event.subagent(), current)

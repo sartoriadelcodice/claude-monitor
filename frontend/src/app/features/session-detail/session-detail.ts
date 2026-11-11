@@ -21,6 +21,9 @@ import { SessionStore } from '../../core/session-store.service';
         @if (model(); as modelName) {
           <span class="muted"><i class="pi pi-microchip-ai"></i> {{ modelName }}</span>
         }
+        @if (session().remoteSessionId) {
+          <span class="muted"><i class="pi pi-globe"></i> Controllo remoto</span>
+        }
       </section>
       @if (session().title) {
         <p class="title">{{ session().title }}</p>

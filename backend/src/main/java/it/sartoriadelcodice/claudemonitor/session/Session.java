@@ -52,6 +52,10 @@ public class Session {
     @Column(name = "seen_at")
     private Instant seenAt;
 
+    /** Identificativo del controllo remoto di Claude Code (session_...), null se non è attivo. */
+    @Column(name = "remote_session_id")
+    private String remoteSessionId;
+
     @Column(nullable = false)
     private boolean archived;
 
@@ -169,6 +173,14 @@ public class Session {
 
     public void setSeenAt(Instant seenAt) {
         this.seenAt = seenAt;
+    }
+
+    public String getRemoteSessionId() {
+        return remoteSessionId;
+    }
+
+    public void setRemoteSessionId(String remoteSessionId) {
+        this.remoteSessionId = remoteSessionId;
     }
 
     public boolean isArchived() {

@@ -15,6 +15,22 @@ export interface Session {
   seenAt: string | null;
   archived: boolean;
   createdAt: string;
+  /** Identificativo del controllo remoto di Claude Code (session_...), null se non è attivo. */
+  remoteSessionId: string | null;
+}
+
+/** Macchina con l'agente del focus collegato. */
+export interface FocusAgent {
+  machine: string;
+  /** Sul Mac c'è l'app Claude: l'agente vi apre le sessioni in controllo remoto delle altre macchine. */
+  claudeApp: boolean;
+}
+
+/** Dove il focus ha aperto la sessione. */
+export interface FocusResult {
+  machine: string;
+  /** Aperta nell'app Claude (controllo remoto) invece che nella sua finestra. */
+  claudeApp: boolean;
 }
 
 export interface SessionEvent {

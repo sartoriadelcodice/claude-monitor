@@ -67,6 +67,19 @@ class HookEventTest {
     }
 
     @Test
+    void remoteSessionIdIsAcceptedOnlyInClaudeCodeForm() throws Exception {
+        assertThat(parse(",\"remote_session_id\":\"session_01AbCdEfGhIjKlMnOpQrStUv\"").remoteSessionId())
+                .isEqualTo("session_01AbCdEfGhIjKlMnOpQrStUv");
+        assertThat(parse(",\"remote_session_id\":\"cse_01AbCdEfGh\"").remoteSessionId()).isEqualTo("cse_01AbCdEfGh");
+        assertThat(parse("").remoteSessionId()).isNull();
+        // Finisce in un link aperto da un'altra macchina: niente percorsi, parametri o altri schemi
+        assertThat(parse(",\"remote_session_id\":\"session_1/../../x\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"session_1?q=x\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"https://example.com\"").remoteSessionId()).isNull();
+        assertThat(parse(",\"remote_session_id\":\"session_" + "a".repeat(81) + "\"").remoteSessionId()).isNull();
+    }
+
+    @Test
     void agentIdMarksSubagentEvents() throws Exception {
         assertThat(parse(",\"agent_id\":\"a1\",\"agent_type\":\"Explore\"").subagent()).isTrue();
         assertThat(parse("").subagent()).isFalse();

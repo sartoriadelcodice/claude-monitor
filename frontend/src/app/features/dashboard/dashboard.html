@@ -67,11 +67,11 @@
       }
       <div class="grid">
         @for (session of group.sessions; track session.id) {
-          <!-- Il pulsante del focus è accanto alla card e non dentro: un pulsante non può contenerne un altro -->
-          <div class="card-wrap" [class.zoomed]="zoomed(session)" [class.with-focus]="focusable(session)">
+          <!-- La barra del focus è sotto la card e non dentro: un pulsante non può contenerne un altro -->
+          <div class="card-wrap" [class.zoomed]="zoomed(session)" [class.highlight]="highlighted(session)"
+               [class.with-focus]="focusable(session)" [style.--status]="meta(session).color">
           <button type="button" class="card" [class.highlight]="highlighted(session)" [class.zoomed]="zoomed(session)"
-                  [class.dim]="session.archived || session.status === 'ENDED'"
-                  [style.--status]="meta(session).color" (click)="open(session)">
+                  [class.dim]="session.archived || session.status === 'ENDED'" (click)="open(session)">
             <span class="status">
               <span class="dot"></span>
               {{ meta(session).label }}
@@ -92,11 +92,12 @@
             <span class="since">da {{ elapsed(session) }}</span>
           </button>
           @if (focusable(session)) {
-            <button type="button" class="focus" [class.ok]="focusState().get(session.id) === 'ok'"
-                    [class.error]="focusState().get(session.id) === 'error'"
-                    [attr.aria-label]="'Porta in primo piano la finestra di ' + session.project + ' su ' + session.machine"
+            <button type="button" class="focus" [class.ok]="focusStatus(session) === 'ok'"
+                    [class.error]="focusStatus(session) === 'error'"
+                    [attr.aria-label]="focusLabel(session) + ': ' + session.project + ' su ' + session.machine"
                     (click)="focus(session)">
-              <i [class]="focusIcon(session)"></i>
+              <i [class]="focusIcon(session)" aria-hidden="true"></i>
+              <span>{{ focusLabel(session) }}</span>
             </button>
           }
           </div>

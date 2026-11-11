@@ -16,6 +16,8 @@
   --cm-green: #16a34a;
   --cm-blue: #2563eb;
   --cm-gray: #6b7280;
+  // Testo sui pulsanti pieni con il colore di stato
+  --cm-on-status: #ffffff;
 }
 
 :root.app-dark {
@@ -31,6 +33,8 @@
   --cm-green: #22c55e;
   --cm-blue: #3b82f6;
   --cm-gray: #6b7280;
+  // Nel tema scuro i colori di stato sono chiari: il bianco sopra non si leggerebbe
+  --cm-on-status: #0b0f17;
 }
 
 // Nella PWA su iPadOS la barra di stato è trasparente con testo bianco (black-translucent, fissato

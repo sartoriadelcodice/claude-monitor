@@ -4,7 +4,15 @@ import { firstValueFrom } from 'rxjs';
 
 import { AudioService } from './audio.service';
 import { AuthService } from './auth.service';
-import { STATUS_META, Session, SessionEvent, SessionStatus, requiresAttention } from './models';
+import {
+  FocusAgent,
+  FocusResult,
+  STATUS_META,
+  Session,
+  SessionEvent,
+  SessionStatus,
+  requiresAttention,
+} from './models';
 import { SettingsService } from './settings.service';
 
 /** Senza dati (heartbeat compresi) per questo tempo la connessione SSE è considerata morta. */
@@ -23,8 +31,14 @@ export class SessionStore {
   readonly sessions = signal<Session[]>([]);
   readonly connected = signal(false);
   readonly includeHistory = signal(false);
+  /** Macchine con l'agente del focus collegato. */
+  readonly focusAgents = signal<readonly FocusAgent[]>([]);
   /** Macchine su cui un agente può portare in primo piano la finestra di una sessione. */
-  readonly focusMachines = signal<ReadonlySet<string>>(new Set());
+  readonly focusMachines = computed<ReadonlySet<string>>(() => new Set(this.focusAgents().map((a) => a.machine)));
+  /** Macchine in cui l'agente può aprire nell'app Claude le sessioni in controllo remoto. */
+  readonly claudeAppMachines = computed<ReadonlySet<string>>(
+    () => new Set(this.focusAgents().filter((a) => a.claudeApp).map((a) => a.machine)),
+  );
   /** Orologio aggiornato periodicamente, per i tempi mostrati sulle card. */
   readonly now = signal(Date.now());
 
@@ -91,7 +105,7 @@ export class SessionStore {
     this.zoomed.set(new Set());
     this.firstLoadDone = false;
     this.sessions.set([]);
-    this.focusMachines.set(new Set());
+    this.focusAgents.set([]);
   }
 
   setIncludeHistory(value: boolean): void {
@@ -120,16 +134,18 @@ export class SessionStore {
   }
 
   /**
-   * Chiede alla macchina della sessione di portare in primo piano la finestra che la ospita.
-   * Restituisce false se la richiesta non arriva a un agente (macchina spenta o agente non attivo).
+   * Porta in primo piano la sessione sul Mac in uso: la sua finestra, o l'app Claude di un altro Mac se la
+   * sessione è in controllo remoto. La scelta la fa il server. Restituisce dove l'ha aperta, oppure null se
+   * la richiesta non arriva a un agente (macchina spenta o agente non attivo).
    */
-  async focus(session: Session): Promise<boolean> {
+  async focus(session: Session): Promise<FocusResult | null> {
     try {
-      await firstValueFrom(this.http.post(`api/sessions/${encodeURIComponent(session.id)}/focus`, null));
-      return true;
+      return await firstValueFrom(
+        this.http.post<FocusResult>(`api/sessions/${encodeURIComponent(session.id)}/focus`, null),
+      );
     } catch {
       void this.loadFocusMachines();
-      return false;
+      return null;
     }
   }
 
@@ -149,17 +165,16 @@ export class SessionStore {
   async setFocusEnabled(enabled: boolean): Promise<boolean> {
     const saved = await firstValueFrom(this.http.put<{ enabled: boolean }>('api/focus/settings', { enabled }));
     if (!saved.enabled) {
-      this.focusMachines.set(new Set());
+      this.focusAgents.set([]);
     }
     void this.loadFocusMachines();
     return saved.enabled;
   }
 
-  /** Macchine con l'agente collegato: solo sulle loro card compare il pulsante del focus. */
+  /** Macchine con l'agente collegato: decidono su quali card compare il pulsante del focus. */
   private async loadFocusMachines(): Promise<void> {
     try {
-      const machines = await firstValueFrom(this.http.get<string[]>('api/focus/machines'));
-      this.focusMachines.set(new Set(machines));
+      this.focusAgents.set(await firstValueFrom(this.http.get<FocusAgent[]>('api/focus/agents')));
     } catch {
       // Errore di rete: resta l'elenco precedente fino al prossimo giro
     }

@@ -51,6 +51,26 @@ try {
         }
     }
 
+    # Controllo remoto (Remote Control) di Claude Code: l'identificativo della sessione remota (session_...) sta in
+    # ~/.claude/sessions/<pid>.json, un file per ogni processo di Claude Code. Con quello la dashboard apre la
+    # sessione nell'app Claude del Mac in uso. Si legge a ogni evento: spento il controllo remoto, il campo manca.
+    $configDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+    $sessionsDir = Join-Path $configDir 'sessions'
+    if ($data.session_id -and (Test-Path -LiteralPath $sessionsDir)) {
+        # Se più file hanno la sessione (processo chiuso male) vale il più recente
+        $files = Get-ChildItem -LiteralPath $sessionsDir -Filter '*.json' -File | Sort-Object LastWriteTime -Descending
+        foreach ($file in $files) {
+            try { $info = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
+            catch { continue }
+            if ($info.sessionId -ne $data.session_id) { continue }
+            # Finisce in un link aperto da un altro Mac: solo la forma di Claude Code, mai altro testo
+            if ($info.bridgeSessionId -cmatch '^(cse|session)_[A-Za-z0-9_-]{1,80}$') {
+                $data | Add-Member -NotePropertyName remote_session_id -NotePropertyValue $info.bridgeSessionId -Force
+            }
+            break
+        }
+    }
+
     # Si tolgono i campi voluminosi o riservati che alla dashboard non servono
     foreach ($name in 'prompt', 'tool_input', 'tool_response', 'permission_suggestions', 'last_assistant_message') {
         $data.PSObject.Properties.Remove($name)

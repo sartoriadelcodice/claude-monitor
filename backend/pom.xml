@@ -13,7 +13,7 @@
 
     <groupId>it.sartoriadelcodice</groupId>
     <artifactId>claude-monitor</artifactId>
-    <version>0.6.0</version>
+    <version>0.6.2</version>
     <name>claude-monitor</name>
     <description>Dashboard di monitoraggio delle sessioni Claude Code</description>
 

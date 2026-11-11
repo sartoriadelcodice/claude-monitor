@@ -1,6 +1,7 @@
 package it.sartoriadelcodice.claudemonitor.event;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,10 +20,17 @@ public record HookEvent(
         String model,
         boolean backgroundWork,
         boolean subagent,
+        String remoteSessionId,
         String rawPayload) {
 
     /** Lunghezza massima del payload salvato nella cronologia. */
     private static final int MAX_PAYLOAD_LENGTH = 20_000;
+
+    /**
+     * Identificativo del controllo remoto come lo scrive Claude Code (session_... o cse_...). Finisce in un link
+     * aperto dall'agente di un'altra macchina: si accetta solo questa forma, mai altro testo.
+     */
+    private static final Pattern REMOTE_SESSION_ID = Pattern.compile("(cse|session)_[A-Za-z0-9_-]{1,80}");
 
     /** Contenuti della conversazione: non servono alla dashboard e non vanno conservati. */
     private static final List<String> PRIVATE_FIELDS = List.of(
@@ -75,7 +83,16 @@ public record HookEvent(
         return new HookEvent(sessionId, eventName, limit(machine != null ? machine : "sconosciuta", 255),
                 limit(project, 255), cwd, limit(text(json, "notification_type"), 100), text(json, "message"),
                 text(json, "source"), limit(text(json, "session_title"), 500), limit(model, 100),
-                hasBackgroundWork(json), text(json, "agent_id") != null, raw);
+                hasBackgroundWork(json), text(json, "agent_id") != null, remoteSessionId(json), raw);
+    }
+
+    /**
+     * Controllo remoto attivo: lo script hook aggiunge remote_session_id a ogni evento in cui lo trova.
+     * Un valore malformato vale come assente.
+     */
+    private static String remoteSessionId(JsonNode json) {
+        String value = text(json, "remote_session_id");
+        return value != null && REMOTE_SESSION_ID.matcher(value).matches() ? value : null;
     }
 
     private static String limit(String value, int max) {

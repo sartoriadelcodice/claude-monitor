@@ -1,8 +1,11 @@
 package it.sartoriadelcodice.claudemonitor.focus;
 
-import java.util.Set;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import it.sartoriadelcodice.claudemonitor.auth.AuthUser;
+import it.sartoriadelcodice.claudemonitor.focus.FocusAgentRegistry.AgentInfo;
+import it.sartoriadelcodice.claudemonitor.focus.FocusService.FocusResult;
 import it.sartoriadelcodice.claudemonitor.session.SessionDto;
 import it.sartoriadelcodice.claudemonitor.session.SessionService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,14 +25,16 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * Finestra della sessione in primo piano sulla macchina che la ospita.
- * La dashboard chiede il focus; l'agente della macchina, in ascolto sul proprio stream, lo esegue.
+ * Finestra della sessione in primo piano sulla macchina che l'utente sta usando.
+ * La dashboard chiede il focus; l'agente della macchina scelta, in ascolto sul proprio stream, lo esegue.
  */
 @RestController
 public class FocusController {
 
     /** Stesso limite della colonna "machine" delle sessioni. */
     private static final int MAX_MACHINE_LENGTH = 255;
+    /** Identificativi delle richieste di inattività, generati da {@link FocusAgentRegistry}. */
+    private static final Pattern PROBE_ID = Pattern.compile("[0-9a-f]{32}");
 
     private final FocusAgentRegistry registry;
     private final SessionService sessionService;
@@ -41,25 +46,44 @@ public class FocusController {
         this.focusService = focusService;
     }
 
-    /** Stream SSE per l'agente di una macchina, autenticato con la chiave hook. */
+    /**
+     * Stream SSE per l'agente di una macchina, autenticato con la chiave hook.
+     *
+     * @param claudeApp vero se sul Mac c'è l'app Claude: l'agente può aprirvi le sessioni in controllo remoto
+     */
     @GetMapping(path = "/api/agent/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter agentStream(@AuthenticationPrincipal AuthUser user, @RequestParam String machine,
+                                  @RequestParam(defaultValue = "false") boolean claudeApp,
                                   HttpServletResponse response) {
         requireEnabled(user);
-        String name = machine.trim();
-        if (name.isEmpty() || name.length() > MAX_MACHINE_LENGTH) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome della macchina non valido");
-        }
+        String name = machineName(machine);
         // Disattiva il buffering di nginx per questa risposta
         response.setHeader("X-Accel-Buffering", "no");
         response.setHeader("Cache-Control", "no-cache, no-transform");
-        return registry.register(user.id(), name);
+        return registry.register(user.id(), name, claudeApp);
     }
 
-    /** Macchine dell'utente su cui la dashboard può portare una finestra in primo piano. */
-    @GetMapping("/api/focus/machines")
-    public Set<String> machines(@AuthenticationPrincipal AuthUser user) {
-        return focusService.isEnabled(user.id()) ? registry.machines(user.id()) : Set.of();
+    /**
+     * Risposta dell'agente a una richiesta di inattività: secondi dall'ultimo uso di tastiera e mouse.
+     * 404 se la richiesta è scaduta o non era rivolta a quella macchina.
+     */
+    @PostMapping("/api/agent/activity")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void activity(@AuthenticationPrincipal AuthUser user, @RequestParam String probe,
+                         @RequestParam String machine, @RequestParam long idle) {
+        requireEnabled(user);
+        if (!PROBE_ID.matcher(probe).matches() || idle < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Risposta non valida");
+        }
+        if (!registry.reportIdle(user.id(), probe, machineName(machine), idle)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Richiesta scaduta o sconosciuta");
+        }
+    }
+
+    /** Macchine dell'utente con l'agente collegato, e quali di queste hanno l'app Claude. */
+    @GetMapping("/api/focus/agents")
+    public List<AgentInfo> agents(@AuthenticationPrincipal AuthUser user) {
+        return focusService.isEnabled(user.id()) ? registry.agents(user.id()) : List.of();
     }
 
     /** Stato dell'interruttore del focus dell'utente. */
@@ -76,18 +100,17 @@ public class FocusController {
     }
 
     /**
-     * Porta in primo piano la finestra della sessione; 403 se l'utente ha spento il focus,
-     * 409 se sulla sua macchina non c'è un agente collegato.
+     * Porta in primo piano la sessione sul Mac in uso e dice dove l'ha aperta; 403 se l'utente ha spento
+     * il focus, 409 se non c'è un agente collegato che possa aprirla.
      */
     @PostMapping("/api/sessions/{id}/focus")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void focus(@AuthenticationPrincipal AuthUser user, @PathVariable String id) {
+    public FocusResult focus(@AuthenticationPrincipal AuthUser user, @PathVariable String id) {
         requireEnabled(user);
         SessionDto session = sessionService.find(user.id(), id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sessione non trovata"));
-        if (!registry.focus(user.id(), session.machine(), session.id())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nessun agente collegato dalla macchina");
-        }
+        return focusService.focus(user.id(), session)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Nessun agente collegato che possa aprire la sessione"));
     }
 
     /** Con l'interruttore spento non si accettano né richieste di focus né agenti in ascolto. */
@@ -95,6 +118,14 @@ public class FocusController {
         if (!focusService.isEnabled(user.id())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Focus delle finestre disattivato");
         }
+    }
+
+    private static String machineName(String machine) {
+        String name = machine.trim();
+        if (name.isEmpty() || name.length() > MAX_MACHINE_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome della macchina non valido");
+        }
+        return name;
     }
 
     public record FocusSettings(boolean enabled) {

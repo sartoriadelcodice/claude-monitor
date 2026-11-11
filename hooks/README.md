@@ -101,12 +101,41 @@ Come funziona:
   `bash ~/.claude/hooks/claude-monitor-agent.sh focus <session_id>`.
 - Rimozione: `bash ~/.claude/hooks/claude-monitor-agent.sh uninstall`.
 
+### Sessioni in controllo remoto
+
+Con il controllo remoto di Claude Code attivo (`/remote-control`, o `remoteControlAtStartup` nelle impostazioni)
+una sessione che gira su un Mac si può seguire dall'app Claude di un altro. «Apri finestra» la apre sul Mac
+che stai usando:
+
+- L'hook legge l'identificativo del controllo remoto (`bridgeSessionId`, come `session_...`) dal file del
+  processo in `~/.claude/sessions/<pid>.json` e lo invia a ogni evento come `remote_session_id`. Se il
+  controllo remoto viene spento il campo manca e la dashboard lo dimentica. Vale anche su Linux e Windows.
+- Al collegamento l'agente dichiara se sul Mac c'è l'app Claude (`com.anthropic.claudefordesktop` in
+  `/Applications` o `~/Applications`).
+- Al tocco su «Apri finestra» il backend chiede agli agenti coinvolti (il Mac della sessione e quelli con l'app
+  Claude) da quanti secondi non si usano tastiera e mouse, aspetta le risposte per un secondo e mezzo e sceglie
+  il Mac usato per ultimo. Se è quello della sessione porta avanti la finestra come sempre; altrimenti l'agente
+  di quel Mac apre la sessione nell'app Claude con `claude://code/<identificativo>`. A parità vince il Mac
+  della sessione. Il pulsante dice dove l'ha aperta.
+- Se la macchina della sessione non ha l'agente (ad esempio Linux o Windows) il pulsante si chiama
+  «Apri in Claude» e la sessione si apre nell'app Claude di un Mac con l'agente.
+- L'agente comunica il tempo di inattività solo quando il backend lo chiede, cioè a ogni tocco su
+  «Apri finestra», e non manda altro. Prove locali: `bash ~/.claude/hooks/claude-monitor-agent.sh idle` e
+  `bash ~/.claude/hooks/claude-monitor-agent.sh remote <session_...>`.
+- Dopo l'aggiornamento va reinstallato l'agente su ogni Mac (stesso comando dell'installazione): un agente
+  di una versione precedente non risponde alle richieste e non apre l'app Claude.
+
 ### Protezioni
 
 - **Solo https**: l'agente non si collega a un indirizzo `http`, tranne verso la macchina stessa.
-- **Richieste anomale**: ognuna vale dei punti, sommati su dieci minuti. Un identificativo malformato vale
-  10 punti; una sessione che il Mac non conosce o una richiesta a meno di due secondi dalla precedente
-  valgono 1 punto. A 10 punti, o oltre 60 focus eseguiti in un'ora, l'agente si blocca.
+- **Richieste anomale**: ognuna vale dei punti, sommati su dieci minuti. Un identificativo malformato
+  (di sessione, di controllo remoto o di richiesta di inattività) vale 10 punti; una sessione che il Mac non
+  conosce, una sessione remota su un Mac senza l'app Claude, un focus a meno di due secondi dal precedente o
+  una richiesta di inattività nello stesso secondo della precedente valgono 1 punto. A 10 punti, oltre 60
+  focus eseguiti in un'ora o oltre 120 richieste di inattività in un'ora, l'agente si blocca.
+- **Link composti in locale**: per il controllo remoto dal backend arriva solo l'identificativo
+  (`session_` o `cse_` seguito da lettere, cifre, `_` e `-`); il link `claude://code/...` lo compone l'agente
+  e lo apre solo con l'app Claude.
 - **Blocco**: l'agente chiude il collegamento, mostra una notifica, scrive il motivo in
   `~/.claude/claude-monitor/agent.locked` e non si ricollega. Dalla dashboard il pulsante del focus sparisce.
   Il blocco non si toglie dalla rete: dopo aver letto il registro si lancia sul Mac
@@ -115,10 +144,12 @@ Come funziona:
   macchine e le sessioni dell'utente. Il backend scollega gli agenti e ne rifiuta i nuovi collegamenti;
   l'agente riprova ogni minuto e riparte da solo quando l'interruttore torna acceso.
 
-Le soglie sono in testa allo script (`suspect_limit`, `suspect_window`, `hourly_limit`, `min_interval`).
+Le soglie sono in testa allo script (`suspect_limit`, `suspect_window`, `hourly_limit`,
+`probe_hourly_limit`, `min_interval`).
 
 Le sessioni già aperte diventano raggiungibili dal primo evento successivo all'aggiornamento dell'hook.
-Su Linux e Windows il focus non è disponibile.
+Su Linux e Windows l'agente non c'è: le loro sessioni si aprono solo nell'app Claude di un Mac, se hanno il
+controllo remoto attivo.
 
 ## Prova manuale
 
@@ -144,7 +175,7 @@ echo '{"session_id":"prova-1","hook_event_name":"Notification","cwd":"/tmp/prova
 ## Comportamento
 
 - Dati inviati: identificativo e nome della sessione, cartella, macchina, tipo di evento, testo delle
-  notifiche di Claude Code, modello. Con `jq` installato (e sempre su Windows) lo script toglie prima
+  notifiche di Claude Code, modello, identificativo del controllo remoto se attivo. Con `jq` installato (e sempre su Windows) lo script toglie prima
   dell'invio prompt, risposte di Claude, input e output dei tool, comandi dei task in background e prompt
   dei risvegli pianificati. Senza `jq` il payload parte intero ed è il backend a scartare quei campi prima
   di salvarlo: per questo `jq` è consigliato.

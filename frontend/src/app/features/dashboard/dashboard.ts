@@ -6,7 +6,14 @@ import { SelectButtonModule } from 'primeng/selectbutton';
 
 import { AudioService } from '../../core/audio.service';
 import { AuthService } from '../../core/auth.service';
-import { STATUS_META, Session, formatElapsed, formatModel, requiresAttention } from '../../core/models';
+import {
+  FocusResult,
+  STATUS_META,
+  Session,
+  formatElapsed,
+  formatModel,
+  requiresAttention,
+} from '../../core/models';
 import { PushService } from '../../core/push.service';
 import { SessionStore } from '../../core/session-store.service';
 import { GroupBy, SettingsService } from '../../core/settings.service';
@@ -24,7 +31,8 @@ interface SessionGroup {
   sessions: Session[];
 }
 
-type FocusState = 'sending' | 'ok' | 'error';
+/** Richiesta di focus in corso o esito dell'ultima, con la macchina su cui si è aperta la sessione. */
+type FocusState = { status: 'sending' } | { status: 'ok'; result: FocusResult } | { status: 'error' };
 
 /** Vista principale: contatore delle sessioni in attesa e griglia di card. */
 @Component({
@@ -159,30 +167,51 @@ export class Dashboard implements OnInit, OnDestroy {
     this.selectedId.set(session.id);
   }
 
-  /** Il pulsante del focus compare solo se la macchina ha l'agente collegato e la sessione è ancora aperta. */
+  /**
+   * Il pulsante del focus compare sulle sessioni ancora aperte se la loro macchina ha l'agente collegato,
+   * oppure se sono in controllo remoto e un altro Mac con l'agente ha l'app Claude.
+   */
   protected focusable(session: Session): boolean {
-    return !session.archived && session.status !== 'ENDED' && this.store.focusMachines().has(session.machine);
+    return (
+      !session.archived &&
+      session.status !== 'ENDED' &&
+      (this.store.focusMachines().has(session.machine) || this.claudeAppOnly(session))
+    );
+  }
+
+  /** La sessione si può aprire solo nell'app Claude di un altro Mac: la sua macchina non ha l'agente. */
+  private claudeAppOnly(session: Session): boolean {
+    return (
+      !this.store.focusMachines().has(session.machine) &&
+      !!session.remoteSessionId &&
+      [...this.store.claudeAppMachines()].some((machine) => machine !== session.machine)
+    );
   }
 
   /**
-   * Porta in primo piano, sulla macchina della sessione, la finestra che la ospita.
+   * Porta in primo piano la sessione sul Mac in uso: la sua finestra, oppure l'app Claude di un altro Mac
+   * se la sessione è in controllo remoto. La scelta la fa il server.
    * Chi va alla finestra ha visto l'avviso: la card viene anche segnata come vista.
    */
   protected async focus(session: Session): Promise<void> {
-    if (this.focusState().get(session.id) === 'sending') {
+    if (this.focusStatus(session) === 'sending') {
       return;
     }
-    this.setFocusState(session.id, 'sending');
+    this.setFocusState(session.id, { status: 'sending' });
     if (this.highlighted(session)) {
       void this.store.markSeen(session);
     }
-    const delivered = await this.store.focus(session);
-    this.setFocusState(session.id, delivered ? 'ok' : 'error');
-    setTimeout(() => this.setFocusState(session.id, null), 2_500);
+    const result = await this.store.focus(session);
+    this.setFocusState(session.id, result ? { status: 'ok', result } : { status: 'error' });
+    setTimeout(() => this.setFocusState(session.id, null), 3_000);
+  }
+
+  protected focusStatus(session: Session): FocusState['status'] | null {
+    return this.focusState().get(session.id)?.status ?? null;
   }
 
   protected focusIcon(session: Session): string {
-    switch (this.focusState().get(session.id)) {
+    switch (this.focusStatus(session)) {
       case 'sending':
         return 'pi pi-spin pi-spinner';
       case 'ok':
@@ -190,7 +219,22 @@ export class Dashboard implements OnInit, OnDestroy {
       case 'error':
         return 'pi pi-times';
       default:
-        return 'pi pi-window-maximize';
+        return this.claudeAppOnly(session) ? 'pi pi-external-link' : 'pi pi-window-maximize';
+    }
+  }
+
+  protected focusLabel(session: Session): string {
+    const state = this.focusState().get(session.id);
+    switch (state?.status) {
+      case 'sending':
+        return 'Apertura…';
+      case 'ok':
+        // Dove è finita la sessione: con il controllo remoto può essere un Mac diverso dal suo
+        return state.result.claudeApp ? `App Claude su ${state.result.machine}` : `Finestra su ${state.result.machine}`;
+      case 'error':
+        return 'Non raggiungibile';
+      default:
+        return this.claudeAppOnly(session) ? 'Apri in Claude' : 'Apri finestra';
     }
   }
 

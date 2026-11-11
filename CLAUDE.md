@@ -87,7 +87,15 @@ Package base `it.sartoriadelcodice.claudemonitor`, organizzato per funzionalità
   `GET /api/agent/stream` con la chiave hook. Verso l'agente deve viaggiare solo l'identificativo: applicazione,
   terminale e cartella restano nel file locale scritto dall'hook. L'agente (`hooks/claude-monitor-agent.sh`,
   solo macOS, attivato a mano) non deve mai eseguire comandi ricevuti dalla rete né inviare tasti.
-- Protezioni del focus, da non allentare: l'agente conta le richieste anomale e si blocca da solo
+- Controllo remoto (Remote Control di Claude Code): l'hook invia a ogni evento `remote_session_id`, il
+  `bridgeSessionId` letto da `~/.claude/sessions/<pid>.json`; se manca, il controllo remoto è spento.
+  Per queste sessioni `FocusService` sceglie il Mac usato per ultimo: chiede agli agenti i secondi di inattività
+  (evento `probe`, risposta su `POST /api/agent/activity`) e porta avanti la finestra sul Mac della sessione,
+  oppure manda l'evento `remote` a un Mac con l'app Claude, il cui agente apre `claude://code/<id>`.
+  Anche qui viaggia solo l'identificativo, accettato solo nella forma `session_`/`cse_` sia da `HookEvent` sia
+  dall'agente, che compone il link da sé. L'inattività si comunica solo su richiesta, mai di continuo.
+- Protezioni del focus, da non allentare: l'agente conta le richieste anomale (e a parte le richieste di
+  inattività, con un proprio limite orario) e si blocca da solo
   (`agent.locked`, si toglie solo sul Mac con `unlock`, mai dalla rete); l'interruttore dell'utente
   (`users.focus_enabled`, `FocusService`) scollega gli agenti e fa rispondere 403 a richieste e stream.
 - Multiutente: sessioni, cronologia, stream SSE e subscription push appartengono a un utente.
@@ -106,8 +114,12 @@ Package base `it.sartoriadelcodice.claudemonitor`, organizzato per funzionalità
 - I suoni partono solo sulle transizioni di stato rilevate in `SessionStore.trackTransition`.
 - Il primo tocco su una card evidenziata la segna solo come vista (ferma evidenziazione e ripetizione del
   suono); il dettaglio si apre toccando una card già vista (`Dashboard.open`).
-- Sulle card delle macchine con l'agente collegato (`SessionStore.focusMachines`) c'è il pulsante del focus,
-  accanto alla card e non dentro; `Dashboard.focus` porta avanti la finestra e segna la card come vista.
+- Sulle card delle macchine con l'agente collegato (`SessionStore.focusMachines`) c'è il pulsante del focus:
+  una barra "Apri finestra" a tutta larghezza attaccata sotto la card (fuori dal pulsante della card, perché un
+  pulsante non può contenerne un altro), piena nel colore dello stato quando la card sta avvisando.
+  `Dashboard.focus` porta avanti la finestra e segna la card come vista; l'esito dice su quale macchina si è
+  aperta la sessione. Le sessioni in controllo remoto di macchine senza agente hanno la barra "Apri in Claude"
+  se un altro Mac con l'agente ha l'app Claude (`SessionStore.claudeAppMachines`).
 - Tema chiaro e scuro: i colori passano tutti dalle variabili `--cm-*` di `styles.scss`, mai valori fissi nei
   componenti. La classe `app-dark` su `<html>` attiva il tema scuro anche per PrimeNG; la imposta
   `SettingsService` e, prima dell'avvio, lo script in `index.html` (stessa chiave `cm.settings`).

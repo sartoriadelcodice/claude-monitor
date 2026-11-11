@@ -93,7 +93,7 @@ class EventControllerTest {
         Instant now = Instant.parse("2026-11-10T10:00:00Z");
         return new SessionDto("abc123", "macbook", "my-project", "/home/user/my-project", null, null,
                 SessionStatus.NEEDS_ATTENTION, now, now, "Claude needs your permission", "permission_prompt",
-                null, false, now);
+                null, false, now, null);
     }
 
     @Test

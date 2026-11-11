@@ -60,7 +60,7 @@ class SessionServiceTest {
 
     private static HookEvent event(String name, String notificationType, String message) {
         return new HookEvent("s1", name, "macbook", "demo", "/work/demo", notificationType, message, null, null,
-                null, false, false, "{}");
+                null, false, false, null, "{}");
     }
 
     @Test
@@ -167,13 +167,13 @@ class SessionServiceTest {
     @Test
     void modelAndTitleAreKeptUntilReplaced() {
         service.handleEvent(USER_ID, new HookEvent("s1", "SessionStart", "macbook", "demo", "/work/demo", null,
-                null, "startup", "auth-refactor", "claude-opus-5", false, false, "{}"));
+                null, "startup", "auth-refactor", "claude-opus-5", false, false, null, "{}"));
         SessionDto unchanged = service.handleEvent(USER_ID, event("Stop", null, null));
         assertThat(unchanged.model()).isEqualTo("claude-opus-5");
         assertThat(unchanged.title()).isEqualTo("auth-refactor");
 
         SessionDto switched = service.handleEvent(USER_ID, new HookEvent("s1", "PostModelSwitch", "macbook",
-                "demo", "/work/demo", null, null, "command", null, "claude-sonnet-5", false, false, "{}"));
+                "demo", "/work/demo", null, null, "command", null, "claude-sonnet-5", false, false, null, "{}"));
         assertThat(switched.model()).isEqualTo("claude-sonnet-5");
         assertThat(switched.status()).isEqualTo(SessionStatus.WAITING_INPUT);
     }
@@ -184,15 +184,26 @@ class SessionServiceTest {
 
         // Claude ha fatto "cd" in una sottocartella: cwd e project dell'evento cambiano
         SessionDto moved = service.handleEvent(USER_ID, new HookEvent("s1", "PostToolUse", "macbook", "frontend",
-                "/work/demo/frontend", null, null, null, null, null, false, false, "{}"));
+                "/work/demo/frontend", null, null, null, null, null, false, false, null, "{}"));
         assertThat(moved.project()).isEqualTo("demo");
         assertThat(moved.cwd()).isEqualTo("/work/demo");
 
         // Una ripresa da un'altra cartella invece aggiorna il progetto
         SessionDto resumed = service.handleEvent(USER_ID, new HookEvent("s1", "SessionStart", "macbook", "other",
-                "/work/other", null, null, "resume", null, null, false, false, "{}"));
+                "/work/other", null, null, "resume", null, null, false, false, null, "{}"));
         assertThat(resumed.project()).isEqualTo("other");
         assertThat(resumed.cwd()).isEqualTo("/work/other");
+    }
+
+    @Test
+    void remoteControlFollowsTheLatestEvent() {
+        SessionDto enabled = service.handleEvent(USER_ID, new HookEvent("s1", "Stop", "macbook", "demo",
+                "/work/demo", null, null, null, null, null, false, false, "session_01ABC", "{}"));
+        assertThat(enabled.remoteSessionId()).isEqualTo("session_01ABC");
+
+        // L'hook lo invia a ogni evento: se manca, il controllo remoto è stato spento
+        SessionDto disabled = service.handleEvent(USER_ID, event("Stop", null, null));
+        assertThat(disabled.remoteSessionId()).isNull();
     }
 
     @Test
