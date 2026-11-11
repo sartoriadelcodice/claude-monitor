@@ -1,7 +1,6 @@
 package it.sartoriadelcodice.claudemonitor.push;
 
 import java.security.GeneralSecurityException;
-import java.security.Security;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,11 +11,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.sartoriadelcodice.claudemonitor.config.MonitorProperties;
 import it.sartoriadelcodice.claudemonitor.session.SessionDto;
 import it.sartoriadelcodice.claudemonitor.session.SessionStatus;
-import nl.martijndwars.webpush.Encoding;
 import nl.martijndwars.webpush.Notification;
-import nl.martijndwars.webpush.PushService;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -35,14 +31,15 @@ public class PushNotifier {
     private final PushSubscriptionRepository subscriptions;
     private final ObjectMapper objectMapper;
     private final MessageSource messages;
-    private final PushService pushService;
+    /** null when the VAPID keys are missing or invalid: push notifications are disabled. */
+    private final WebPushClient client;
 
     public PushNotifier(PushSubscriptionRepository subscriptions, ObjectMapper objectMapper, MessageSource messages,
                         MonitorProperties properties) {
         this.subscriptions = subscriptions;
         this.objectMapper = objectMapper;
         this.messages = messages;
-        this.pushService = createPushService(properties.push());
+        this.client = createClient(properties.push());
     }
 
     /** The requested language if notifications support it, otherwise the default one. */
@@ -51,16 +48,13 @@ public class PushNotifier {
         return LANGUAGES.contains(normalized) ? normalized : LANGUAGES.getFirst();
     }
 
-    private static PushService createPushService(MonitorProperties.Push push) {
+    private static WebPushClient createClient(MonitorProperties.Push push) {
         if (!push.enabled()) {
             log.warn("VAPID keys not configured: push notifications disabled");
             return null;
         }
         try {
-            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-                Security.addProvider(new BouncyCastleProvider());
-            }
-            return new PushService(push.vapidPublicKey(), push.vapidPrivateKey(), push.vapidSubject());
+            return new WebPushClient(push.vapidPublicKey(), push.vapidPrivateKey(), push.vapidSubject());
         } catch (GeneralSecurityException | RuntimeException e) {
             log.error("Invalid VAPID keys: push notifications disabled", e);
             return null;
@@ -70,7 +64,7 @@ public class PushNotifier {
     /** Sends the notification to the owner's devices. Asynchronous: it does not slow down event reception. */
     @Async
     public void notifyAttention(Long userId, SessionDto session) {
-        if (pushService == null) {
+        if (client == null) {
             return;
         }
         // Each device gets the notification in its own language: one payload per language
@@ -120,8 +114,7 @@ public class PushNotifier {
         try {
             var notification = new Notification(
                     subscription.getEndpoint(), subscription.getP256dh(), subscription.getAuth(), payload);
-            var response = pushService.send(notification, Encoding.AES128GCM);
-            int status = response.getStatusLine().getStatusCode();
+            int status = client.send(notification);
             if (status == 404 || status == 410) {
                 // Subscription expired or revoked by the device
                 subscriptions.deleteById(subscription.getId());

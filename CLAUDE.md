@@ -83,7 +83,9 @@ Base package `it.sartoriadelcodice.claudemonitor`, organized by feature:
 - The hook payload is stored without the conversation content (`HookEvent.withoutPrivateContent`); a new field
   carrying prompt text, answers or commands must be added there and in the scripts in `hooks/`.
 - The endpoint of a push subscription is an address the backend sends requests to: it always goes through
-  `PushEndpointValidator` (https to public addresses only).
+  `PushEndpointValidator` (https to public addresses only). `WebPushClient` sends with the JDK HTTP client and never
+  follows redirects; the web-push library only encrypts and signs the request (`AbstractPushService.prepareRequest`).
+  Its own senders (`PushService`, `PushAsyncService`) and their HTTP clients are excluded in `pom.xml`: don't use them.
 - Push notifications are written in the language of each device: the dashboard sends `language` with the
   subscription and again when the interface language changes. Texts are in `messages*.properties`
   (English default, `fallback-to-system-locale: false`); `PushNotifier.LANGUAGES` lists the supported ones.

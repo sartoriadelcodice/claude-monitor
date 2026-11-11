@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-12
+
+### Changed
+
+- Web Push messages are sent with the JDK HTTP client; the web-push library (now 5.1.2) only encrypts and signs
+  them. Apache HttpClient 4, async-http-client and an older duplicate of BouncyCastle are no longer dependencies,
+  and jose4j is updated to 0.9.7.
+- Push requests never follow redirects, so an endpoint can't lead past the address check.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added
@@ -46,7 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
   accounts with personal hook keys, installable PWA, light and dark theme, hook installers for macOS, Linux and
   Windows.
 
-[Unreleased]: https://github.com/sartoriadelcodice/claude-monitor/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sartoriadelcodice/claude-monitor/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/sartoriadelcodice/claude-monitor/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sartoriadelcodice/claude-monitor/compare/e348709...v0.7.0
 [0.6.2]: https://github.com/sartoriadelcodice/claude-monitor/compare/6059004...e348709
 [0.6.0]: https://github.com/sartoriadelcodice/claude-monitor/compare/4374e16...6059004
