@@ -1,33 +1,35 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 
 import { AuthService } from '../../core/auth.service';
 
+/** Sign-in page. */
 @Component({
   selector: 'app-login',
-  imports: [FormsModule, ButtonModule, InputTextModule],
+  imports: [FormsModule, TranslocoPipe, ButtonModule, InputTextModule],
   template: `
     <main class="login">
       <form class="panel" (ngSubmit)="submit()">
         <img src="icons/icon-192x192.png" alt="" width="72" height="72" />
         <h1>Claude Monitor</h1>
         <label>
-          <span>Utente</span>
+          <span>{{ 'login.username' | transloco }}</span>
           <input pInputText name="username" autocomplete="username" autocapitalize="none"
                  [ngModel]="username()" (ngModelChange)="username.set($event)" required />
         </label>
         <label>
-          <span>Password</span>
+          <span>{{ 'login.password' | transloco }}</span>
           <input pInputText type="password" name="password" autocomplete="current-password"
                  [ngModel]="password()" (ngModelChange)="password.set($event)" required />
         </label>
         @if (error()) {
-          <p class="error" role="alert">{{ error() }}</p>
+          <p class="error" role="alert">{{ 'login.failed' | transloco }}</p>
         }
-        <p-button type="submit" label="Accedi" [loading]="loading()" styleClass="submit" />
+        <p-button type="submit" [label]="'login.submit' | transloco" [loading]="loading()" styleClass="submit" />
       </form>
     </main>
   `,
@@ -89,19 +91,19 @@ export class Login {
   protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly loading = signal(false);
-  protected readonly error = signal<string | null>(null);
+  protected readonly error = signal(false);
 
   protected async submit(): Promise<void> {
     if (!this.username() || !this.password() || this.loading()) {
       return;
     }
     this.loading.set(true);
-    this.error.set(null);
+    this.error.set(false);
     try {
       await this.auth.login(this.username(), this.password());
       await this.router.navigate(['/']);
     } catch {
-      this.error.set('Accesso non riuscito: controlla utente e password.');
+      this.error.set(true);
     } finally {
       this.loading.set(false);
     }

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** Endpoint SSE con gli aggiornamenti in tempo reale delle sessioni. */
+/** SSE endpoint with real-time session updates. */
 @RestController
 public class StreamController {
 
@@ -21,7 +21,7 @@ public class StreamController {
 
     @GetMapping(path = "/api/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@AuthenticationPrincipal AuthUser user, HttpServletResponse response) {
-        // Disattiva il buffering di nginx per questa risposta
+        // Disable nginx buffering for this response
         response.setHeader("X-Accel-Buffering", "no");
         response.setHeader("Cache-Control", "no-cache, no-transform");
         return broadcaster.register(user.id());

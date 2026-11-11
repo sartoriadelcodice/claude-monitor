@@ -1,12 +1,13 @@
 {
   "name": "frontend",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "scripts": {
     "ng": "ng",
     "start": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "i18n:check": "node scripts/check-i18n.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
@@ -19,6 +20,7 @@
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
     "@angular/service-worker": "^22.2.0",
+    "@jsverse/transloco": "^8.4.0",
     "@primeuix/themes": "^3.1.0",
     "primeicons": "^8.0.2",
     "primeng": "^22.1.4",

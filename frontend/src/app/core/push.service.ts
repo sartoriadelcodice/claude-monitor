@@ -1,8 +1,9 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
 
+import { I18n, Language } from './i18n.service';
 import { SettingsService } from './settings.service';
 
 interface PublicKeyResponse {
@@ -12,17 +13,33 @@ interface PublicKeyResponse {
 
 export type PushState = 'unsupported' | 'needs-install' | 'default' | 'granted' | 'denied';
 
-/** Registrazione del dispositivo alle notifiche Web Push. */
+/** Registration of the device for Web Push notifications. */
 @Injectable({ providedIn: 'root' })
 export class PushService {
   private readonly http = inject(HttpClient);
   private readonly swPush = inject(SwPush);
   private readonly settingsService = inject(SettingsService);
+  private readonly i18n = inject(I18n);
+  /** Language last sent to the server with the subscription; null until the first registration. */
+  private sentLanguage: Language | null = null;
 
   readonly state = signal<PushState>(this.readState());
+  /** Translation key of the last error. */
   readonly error = signal<string | null>(null);
 
-  /** Su iPadOS le notifiche push funzionano solo dalla PWA installata nella schermata Home. */
+  constructor() {
+    // The server writes the notifications in the device language: tell it when the language changes
+    effect(() => {
+      const language = this.i18n.language();
+      untracked(() => {
+        if (this.sentLanguage !== null && this.sentLanguage !== language) {
+          void this.syncExisting();
+        }
+      });
+    });
+  }
+
+  /** On iPadOS push notifications only work from the PWA installed on the Home Screen. */
   private readState(): PushState {
     if (!('Notification' in window)) {
       return isIos() && !isStandalone() ? 'needs-install' : 'unsupported';
@@ -33,7 +50,7 @@ export class PushService {
     return Notification.permission;
   }
 
-  /** All'avvio: se il permesso c'è già, riallinea la subscription sul backend. */
+  /** At startup: if permission is already granted, realigns the subscription on the backend. */
   async syncExisting(): Promise<void> {
     if (this.state() !== 'granted') {
       return;
@@ -41,7 +58,7 @@ export class PushService {
     try {
       const existing = await firstValueFrom(this.swPush.subscription);
       if (!this.settingsService.settings().pushEnabled) {
-        // Spente dall'utente: se una disattivazione precedente non è andata a buon fine, la si completa
+        // Turned off by the user: if a previous deactivation did not complete, finish it
         if (existing) {
           await this.remove(existing);
         }
@@ -53,36 +70,36 @@ export class PushService {
         await this.enable();
       }
     } catch {
-      // Ritenterà alla prossima apertura
+      // It will try again the next time the app opens
     }
   }
 
-  /** Chiede il permesso e registra il dispositivo; da chiamare dentro un gesto dell'utente. */
+  /** Asks for permission and registers the device; to be called inside a user gesture. */
   async enable(): Promise<void> {
     this.error.set(null);
     try {
       const key = await firstValueFrom(this.http.get<PublicKeyResponse>('api/push/public-key'));
       if (!key.enabled || !key.publicKey) {
-        this.error.set('Notifiche push non configurate sul server (chiavi VAPID mancanti).');
+        this.error.set('push.notConfigured');
         return;
       }
       const subscription = await this.swPush.requestSubscription({ serverPublicKey: key.publicKey });
       await this.send(subscription);
       this.settingsService.update({ pushEnabled: true });
     } catch {
-      this.error.set('Non è stato possibile attivare le notifiche.');
+      this.error.set('push.enableFailed');
     } finally {
       this.state.set(this.readState());
     }
   }
 
   /**
-   * Spegne le notifiche su questo dispositivo: il permesso del browser resta, ma la subscription
-   * viene rimossa dal server e dal dispositivo. Gli altri dispositivi dell'utente non cambiano.
+   * Turns notifications off on this device: the browser permission stays, but the subscription is
+   * removed from the server and from the device. The user's other devices don't change.
    */
   async disable(): Promise<void> {
     this.error.set(null);
-    // La scelta vale subito: se la rimozione fallisce, syncExisting la ritenta alla prossima apertura
+    // The choice applies right away: if removal fails, syncExisting retries it the next time the app opens
     this.settingsService.update({ pushEnabled: false });
     try {
       const existing = await firstValueFrom(this.swPush.subscription);
@@ -90,7 +107,7 @@ export class PushService {
         await this.remove(existing);
       }
     } catch {
-      this.error.set('Non è stato possibile completare la disattivazione: verrà ritentata alla prossima apertura.');
+      this.error.set('push.disableFailed');
     }
   }
 
@@ -102,7 +119,9 @@ export class PushService {
   }
 
   private async send(subscription: PushSubscription): Promise<void> {
-    await firstValueFrom(this.http.post<void>('api/push/subscriptions', subscription.toJSON()));
+    const language = this.i18n.language();
+    await firstValueFrom(this.http.post<void>('api/push/subscriptions', { ...subscription.toJSON(), language }));
+    this.sentLanguage = language;
   }
 }
 
@@ -114,6 +133,6 @@ function isStandalone(): boolean {
 }
 
 function isIos(): boolean {
-  // iPadOS si presenta come Mac: si distingue dal supporto touch
+  // iPadOS presents itself as a Mac: it is told apart by touch support
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 }

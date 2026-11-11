@@ -1,30 +1,34 @@
 import { Injectable, signal } from '@angular/core';
 
+import type { LanguageSetting } from './i18n.service';
+
 const SETTINGS_KEY = 'cm.settings';
 
-/** Raggruppamento delle card nella dashboard. */
+/** How the dashboard groups its cards. */
 export type GroupBy = 'none' | 'project' | 'machine' | 'both';
 
 export type Theme = 'dark' | 'light';
 
-/** Colore di sfondo per tema, usato anche dal browser per la barra del titolo (meta theme-color). */
+/** Background color per theme, also used by the browser for the title bar (meta theme-color). */
 const THEME_BACKGROUND: Record<Theme, string> = { dark: '#0b0f17', light: '#f3f5f9' };
 
 export interface Settings {
-  /** null finché l'utente non ha scelto se attivare i suoni. */
+  /** null until the user has chosen whether to enable sounds. */
   soundsEnabled: boolean | null;
-  /** Volume da 0 a 100. */
+  /** Volume from 0 to 100. */
   volume: number;
-  /** Ripetizione del suono di NEEDS_ATTENTION. */
+  /** Repetition of the NEEDS_ATTENTION sound. */
   repeatEnabled: boolean;
   repeatSeconds: number;
   groupBy: GroupBy;
-  /** Notifiche push su questo dispositivo: false quando l'utente le ha spente dalle impostazioni. */
+  /** Push notifications on this device: false when the user turned them off in the settings. */
   pushEnabled: boolean;
-  /** Ingrandimento temporaneo della card che passa a uno stato che richiede attenzione. */
+  /** Temporary enlargement of the card that moves to a state requiring attention. */
   zoomEnabled: boolean;
   zoomSeconds: number;
   theme: Theme;
+  /** Interface language; "auto" follows the browser. */
+  language: LanguageSetting;
 }
 
 const DEFAULTS: Settings = {
@@ -37,9 +41,10 @@ const DEFAULTS: Settings = {
   zoomEnabled: false,
   zoomSeconds: 10,
   theme: 'dark',
+  language: 'auto',
 };
 
-/** Impostazioni della dashboard, salvate sul dispositivo. */
+/** Dashboard settings, saved on the device. */
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   readonly settings = signal<Settings>(load());
@@ -59,12 +64,12 @@ export class SettingsService {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     } catch {
-      // Archiviazione non disponibile: le impostazioni valgono solo per questa apertura
+      // Storage unavailable: the settings only last until the app is closed
     }
   }
 }
 
-/** La classe "app-dark" su <html> governa sia le variabili --cm-* sia il tema di PrimeNG. */
+/** The "app-dark" class on <html> drives both the --cm-* variables and the PrimeNG theme. */
 function applyTheme(theme: Theme): void {
   document.documentElement.classList.toggle('app-dark', theme === 'dark');
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BACKGROUND[theme]);

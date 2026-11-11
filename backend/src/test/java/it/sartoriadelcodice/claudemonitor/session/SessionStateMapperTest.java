@@ -7,7 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
-/** Test della mappatura evento → stato. */
+/** Tests for the event → status mapping. */
 class SessionStateMapperTest {
 
     private final SessionStateMapper mapper = new SessionStateMapper();
@@ -81,7 +81,7 @@ class SessionStateMapperTest {
     @ParameterizedTest
     @EnumSource(value = SessionStatus.class, names = {"WAITING_INPUT", "WORKING", "ENDED"})
     void postToolUseDoesNotOverrideLaterStates(SessionStatus current) {
-        // Un PostToolUse arrivato in ritardo non deve annullare lo Stop
+        // A late PostToolUse must not undo the Stop
         assertThat(mapper.map("PostToolUse", null, null, current)).isEmpty();
     }
 

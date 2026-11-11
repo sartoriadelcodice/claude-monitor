@@ -19,11 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Gestione delle sessioni: applicazione degli eventi, elenco, vista/archiviazione, scadenza. */
+/** Session management: applying events, listing, seen/archived flags, expiration. */
 @Service
 public class SessionService {
 
-    /** Numero massimo di sessioni restituite quando si chiede anche lo storico. */
+    /** Maximum number of sessions returned when the history is requested too. */
     private static final int HISTORY_LIMIT = 500;
 
     private static final Set<SessionStatus> STALE_CANDIDATES = Set.of(
@@ -48,15 +48,15 @@ public class SessionService {
     }
 
     /**
-     * Applica un evento ricevuto da un hook, creando la sessione se non esiste.
-     * La sessione appartiene all'utente della chiave hook; un altro utente non può aggiornarla.
+     * Applies an event received from a hook, creating the session if it does not exist.
+     * The session belongs to the user of the hook key; another user cannot update it.
      */
     @Transactional
     public SessionDto handleEvent(Long userId, HookEvent event) {
         Instant now = clock.instant();
         Optional<Session> existing = sessions.findById(event.sessionId());
         if (existing.isPresent() && !userId.equals(existing.get().getUserId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La sessione appartiene a un altro utente");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The session belongs to another user");
         }
         Session session = existing.orElseGet(
                 () -> new Session(event.sessionId(), userId, event.machine(), event.project(), now));
@@ -64,8 +64,8 @@ public class SessionService {
 
         session.setLastEventAt(now);
         session.setMachine(event.machine());
-        // Progetto e cartella restano quelli dell'avvio: il cwd degli eventi successivi cambia a ogni "cd"
-        // di Claude e farebbe cambiare nome alla card a metà lavoro
+        // Project and folder stay those of the launch: the cwd of later events changes with every "cd"
+        // Claude runs and would rename the card mid-work
         if (existing.isEmpty() || event.isSessionLaunch()) {
             session.setProject(event.project());
             if (event.cwd() != null) {
@@ -78,36 +78,36 @@ public class SessionService {
         if (event.model() != null) {
             session.setModel(event.model());
         }
-        // Ogni evento porta lo stato attuale del controllo remoto: se manca, è stato spento
+        // Every event carries the current Remote Control state: if it is missing, it has been turned off
         session.setRemoteSessionId(event.remoteSessionId());
 
         boolean statusChanged = mapper.map(event.eventName(), event.notificationType(), event.source(),
                         event.backgroundWork(), event.subagent(), current)
                 .map(next -> session.changeStatus(next, now))
                 .orElse(false);
-        // Una sessione nuova conta come cambiamento anche se resta nello stato iniziale IDLE
+        // A new session counts as a change even if it stays in the initial IDLE status
         statusChanged = statusChanged || existing.isEmpty();
 
         if (event.isNotification()) {
             session.setLastNotificationMessage(event.message());
             session.setLastNotificationType(event.notificationType());
         } else if (statusChanged && session.getStatus() == SessionStatus.WORKING) {
-            // Ripartito il lavoro, il vecchio messaggio non è più attuale (resta nella cronologia)
+            // Once work has resumed, the old message is no longer current (it stays in the history)
             session.setLastNotificationMessage(null);
             session.setLastNotificationType(null);
         }
-        // Un evento su una sessione archiviata la riporta nella vista principale
+        // An event on an archived session brings it back to the main view
         if (session.isArchived() && statusChanged) {
             session.setArchived(false);
         }
-        // Una sessione chiusa viene archiviata subito: esce dalla vista principale e resta nello storico
+        // An ended session is archived at once: it leaves the main view and stays in the history
         if (statusChanged && session.getStatus() == SessionStatus.ENDED) {
             session.setArchived(true);
         }
 
         Session saved = sessions.save(session);
 
-        // I PostToolUse sono molto frequenti: si registrano solo quando cambiano lo stato
+        // PostToolUse events are very frequent: they are recorded only when they change the status
         if (!event.isPostToolUse() || statusChanged) {
             events.save(new SessionEvent(saved.getId(), event.eventName(), event.notificationType(),
                     event.message(), saved.getStatus(), event.rawPayload(), now));
@@ -118,7 +118,7 @@ public class SessionService {
         return dto;
     }
 
-    /** Elenco sessioni. Senza storico solo quelle non archiviate (le sessioni chiuse si archiviano da sole). */
+    /** Session list. Without history, only non-archived sessions (ended sessions are archived automatically). */
     @Transactional(readOnly = true)
     public List<SessionDto> list(Long userId, SessionStatus status, String machine, boolean includeHistory) {
         List<Session> source = includeHistory
@@ -131,7 +131,7 @@ public class SessionService {
                 .toList();
     }
 
-    /** Sessione dell'utente; vuoto se non esiste o appartiene a un altro. */
+    /** The user's session; empty if it does not exist or belongs to another user. */
     @Transactional(readOnly = true)
     public Optional<SessionDto> find(Long userId, String sessionId) {
         return sessions.findByIdAndUserId(sessionId, userId).map(SessionDto::from);
@@ -147,7 +147,7 @@ public class SessionService {
                 .toList());
     }
 
-    /** Segna la sessione come vista e/o la archivia. I parametri null vengono ignorati. */
+    /** Marks the session as seen and/or archives it. Null parameters are ignored. */
     @Transactional
     public Optional<SessionDto> update(Long userId, String sessionId, Boolean seen, Boolean archived) {
         return sessions.findByIdAndUserId(sessionId, userId).map(session -> {
@@ -163,7 +163,7 @@ public class SessionService {
         });
     }
 
-    /** Marca STALE le sessioni attive senza eventi da più del tempo configurato. */
+    /** Marks as STALE the active sessions with no events for longer than the configured time. */
     @Transactional
     public int markStaleSessions() {
         Instant now = clock.instant();

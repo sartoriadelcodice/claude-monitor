@@ -1,5 +1,5 @@
-// Server di sviluppo con la chiave di licenza PrimeUI inserita nel bundle.
-// Uso: node scripts/serve.mjs [altre opzioni di ng serve]
+// Development server with the PrimeUI license key embedded in the bundle.
+// Usage: node scripts/serve.mjs [other ng serve options]
 import { spawnSync } from 'node:child_process';
 
 import { defineArgs } from './defines.mjs';

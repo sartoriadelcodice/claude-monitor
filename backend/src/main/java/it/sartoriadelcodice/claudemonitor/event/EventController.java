@@ -15,14 +15,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Ricezione degli eventi inviati dagli hook di Claude Code. */
+/** Receives the events sent by the Claude Code hooks. */
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
 
     /**
-     * Gli hook sono asincroni: due eventi della stessa sessione nuova possono arrivare insieme.
-     * Il lock serializza l'elaborazione ed evita il doppio inserimento della sessione.
+     * Hooks are asynchronous: two events of the same new session can arrive together.
+     * The lock serializes processing and prevents the session from being inserted twice.
      */
     private final ReentrantLock lock = new ReentrantLock();
 

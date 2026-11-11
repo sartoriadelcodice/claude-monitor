@@ -22,7 +22,7 @@ import it.sartoriadelcodice.claudemonitor.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Scelta della macchina su cui aprire una sessione: casi limite delle risposte degli agenti. */
+/** Choice of the machine on which to open a session: edge cases of the agents' replies. */
 class FocusServiceTest {
 
     private static final Long USER_ID = 7L;
@@ -53,57 +53,57 @@ class FocusServiceTest {
 
     @Test
     void withoutRemoteControlNoProbeIsSent() {
-        agents(new AgentInfo("casa", false), new AgentInfo("studio", true));
+        agents(new AgentInfo("home", false), new AgentInfo("studio", true));
 
-        assertThat(service.focus(USER_ID, session("casa", null))).contains(new FocusResult("casa", false));
+        assertThat(service.focus(USER_ID, session("home", null))).contains(new FocusResult("home", false));
         verify(registry, never()).probeIdle(any(), any(), any());
     }
 
     @Test
     void sessionMacThatDoesNotAnswerLosesOnlyToAMacInUse() {
-        agents(new AgentInfo("casa", false), new AgentInfo("studio", true));
+        agents(new AgentInfo("home", false), new AgentInfo("studio", true));
 
-        // Agente del Mac della sessione di una versione precedente: non risponde alla richiesta
+        // The session Mac's agent is from an earlier version: it does not answer the request
         idle(Map.of("studio", FocusService.ACTIVE_IDLE_SECONDS - 1));
-        assertThat(service.focus(USER_ID, session("casa", REMOTE_ID))).contains(new FocusResult("studio", true));
+        assertThat(service.focus(USER_ID, session("home", REMOTE_ID))).contains(new FocusResult("studio", true));
 
         idle(Map.of("studio", FocusService.ACTIVE_IDLE_SECONDS));
-        assertThat(service.focus(USER_ID, session("casa", REMOTE_ID))).contains(new FocusResult("casa", false));
+        assertThat(service.focus(USER_ID, session("home", REMOTE_ID))).contains(new FocusResult("home", false));
     }
 
     @Test
     void withoutAnswersTheSessionMacIsKept() {
-        agents(new AgentInfo("casa", false), new AgentInfo("studio", true));
+        agents(new AgentInfo("home", false), new AgentInfo("studio", true));
         idle(Map.of());
 
-        assertThat(service.focus(USER_ID, session("casa", REMOTE_ID))).contains(new FocusResult("casa", false));
+        assertThat(service.focus(USER_ID, session("home", REMOTE_ID))).contains(new FocusResult("home", false));
     }
 
     @Test
     void mostRecentlyUsedMacWinsAmongSeveral() {
-        agents(new AgentInfo("portatile", true), new AgentInfo("studio", true));
-        idle(Map.of("portatile", 40L, "studio", 900L));
+        agents(new AgentInfo("laptop", true), new AgentInfo("studio", true));
+        idle(Map.of("laptop", 40L, "studio", 900L));
 
-        // La sessione gira su una macchina senza agente (ad esempio Linux)
+        // The session runs on a machine without an agent (for example Linux)
         assertThat(service.focus(USER_ID, session("server", REMOTE_ID)))
-                .contains(new FocusResult("portatile", true));
-        verify(registry).openRemote(USER_ID, "portatile", REMOTE_ID);
+                .contains(new FocusResult("laptop", true));
+        verify(registry).openRemote(USER_ID, "laptop", REMOTE_ID);
     }
 
     @Test
     void failedRemoteOpeningFallsBackToTheSessionWindow() {
-        agents(new AgentInfo("casa", false), new AgentInfo("studio", true));
-        idle(Map.of("casa", 600L, "studio", 2L));
+        agents(new AgentInfo("home", false), new AgentInfo("studio", true));
+        idle(Map.of("home", 600L, "studio", 2L));
         when(registry.openRemote(USER_ID, "studio", REMOTE_ID)).thenReturn(false);
 
-        assertThat(service.focus(USER_ID, session("casa", REMOTE_ID))).contains(new FocusResult("casa", false));
+        assertThat(service.focus(USER_ID, session("home", REMOTE_ID))).contains(new FocusResult("home", false));
     }
 
     @Test
     void macsWithoutClaudeAppAreNotCandidates() {
-        agents(new AgentInfo("casa", false), new AgentInfo("vecchio", false));
+        agents(new AgentInfo("home", false), new AgentInfo("old-mac", false));
 
-        assertThat(service.focus(USER_ID, session("casa", REMOTE_ID))).contains(new FocusResult("casa", false));
+        assertThat(service.focus(USER_ID, session("home", REMOTE_ID))).contains(new FocusResult("home", false));
         verify(registry, never()).probeIdle(any(), any(), any());
         assertThat(service.focus(USER_ID, session("server", REMOTE_ID))).isEmpty();
     }

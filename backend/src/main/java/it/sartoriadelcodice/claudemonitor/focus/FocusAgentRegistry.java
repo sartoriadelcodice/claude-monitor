@@ -21,35 +21,35 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * Registro degli agenti collegati: il processo che su ogni macchina resta in ascolto e porta in primo piano
- * la finestra di una sessione. Gli agenti sono distinti per utente e nome della macchina.
+ * Registry of the connected agents: the process that listens on each machine and brings a session's window
+ * to the front. Agents are keyed by user and machine name.
  * <p>
- * Eventi verso l'agente, ognuno con un solo identificativo come dato:
+ * Events sent to the agent, each carrying a single identifier as data:
  * <ul>
- *   <li>{@code focus}: identificativo della sessione, di cui l'agente porta avanti la finestra;</li>
- *   <li>{@code remote}: identificativo del controllo remoto, che l'agente apre nell'app Claude del Mac;</li>
- *   <li>{@code probe}: identificativo di una richiesta, a cui l'agente risponde con i secondi trascorsi
- *       dall'ultimo uso di tastiera e mouse ({@link #reportIdle});</li>
- *   <li>{@code disabled}: l'utente ha spento il focus.</li>
+ *   <li>{@code focus}: session identifier, whose window the agent brings to the front;</li>
+ *   <li>{@code remote}: Remote Control identifier, which the agent opens in the Mac's Claude app;</li>
+ *   <li>{@code probe}: request identifier, to which the agent replies with the seconds elapsed since
+ *       the last keyboard and mouse use ({@link #reportIdle});</li>
+ *   <li>{@code disabled}: the user turned focus off.</li>
  * </ul>
  */
 @Component
 public class FocusAgentRegistry {
 
     private final Map<AgentKey, List<Agent>> agentsByKey = new ConcurrentHashMap<>();
-    /** Richieste di inattività in attesa di risposta, per identificativo. */
+    /** Idle-time requests awaiting a reply, by identifier. */
     private final Map<String, Probe> probes = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     /**
-     * Registra lo stream di un agente.
+     * Registers an agent's stream.
      *
-     * @param claudeApp vero se sul Mac c'è l'app Claude, dove l'agente sa aprire le sessioni in controllo remoto
+     * @param claudeApp true if the Mac has the Claude app, where the agent can open Remote Control sessions
      */
     public SseEmitter register(Long userId, String machine, boolean claudeApp) {
         List<Agent> agents = agentsByKey.computeIfAbsent(new AgentKey(userId, machine),
                 key -> new CopyOnWriteArrayList<>());
-        // Nessun timeout lato server: la connessione resta viva grazie agli heartbeat
+        // No server-side timeout: heartbeats keep the connection alive
         Agent agent = new Agent(new SseEmitter(0L), claudeApp);
         agent.emitter().onCompletion(() -> agents.remove(agent));
         agent.emitter().onTimeout(() -> agents.remove(agent));
@@ -60,27 +60,27 @@ public class FocusAgentRegistry {
     }
 
     /**
-     * Chiede agli agenti della macchina di portare in primo piano la finestra della sessione.
+     * Asks the machine's agents to bring the session's window to the front.
      *
-     * @return false se nessun agente di quell'utente è collegato dalla macchina
+     * @return false if no agent of that user is connected from the machine
      */
     public boolean focus(Long userId, String machine, String sessionId) {
         return sendToAll(userId, machine, false, SseEmitter.event().name("focus").data(sessionId));
     }
 
     /**
-     * Chiede agli agenti della macchina di aprire nell'app Claude la sessione in controllo remoto.
+     * Asks the machine's agents to open the Remote Control session in the Claude app.
      *
-     * @return false se dalla macchina non è collegato un agente in grado di farlo
+     * @return false if no agent able to do so is connected from the machine
      */
     public boolean openRemote(Long userId, String machine, String remoteSessionId) {
         return sendToAll(userId, machine, true, SseEmitter.event().name("remote").data(remoteSessionId));
     }
 
     /**
-     * Chiede alle macchine quanti secondi sono passati dall'ultimo uso di tastiera e mouse e aspetta le
-     * risposte fino a {@code timeout}. Le macchine che non rispondono in tempo (o con un agente che non
-     * conosce la richiesta) mancano dal risultato.
+     * Asks the machines how many seconds have passed since the last keyboard and mouse use and waits for the
+     * replies up to {@code timeout}. Machines that do not reply in time (or whose agent does not know the
+     * request) are missing from the result.
      */
     public Map<String, Long> probeIdle(Long userId, Collection<String> machines, Duration timeout) {
         String probeId = HexFormat.of().formatHex(randomBytes());
@@ -99,7 +99,7 @@ public class FocusAgentRegistry {
                 CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new))
                         .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             } catch (TimeoutException | ExecutionException e) {
-                // Si usano le risposte arrivate fin qui
+                // Use the replies received so far
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -116,9 +116,9 @@ public class FocusAgentRegistry {
     }
 
     /**
-     * Risposta di un agente a una richiesta di inattività.
+     * An agent's reply to an idle-time request.
      *
-     * @return false se la richiesta non esiste più, è di un altro utente o non era rivolta a quella macchina
+     * @return false if the request no longer exists, belongs to another user or was not addressed to that machine
      */
     public boolean reportIdle(Long userId, String probeId, String machine, long idleSeconds) {
         Probe probe = probes.get(probeId);
@@ -129,7 +129,7 @@ public class FocusAgentRegistry {
         return reply != null && reply.complete(idleSeconds);
     }
 
-    /** Scollega tutti gli agenti dell'utente, dopo averli avvisati che il focus è stato spento. */
+    /** Disconnects all of the user's agents, after notifying them that focus has been turned off. */
     public void disconnect(Long userId) {
         agentsByKey.forEach((key, agents) -> {
             if (!key.userId().equals(userId)) {
@@ -144,7 +144,7 @@ public class FocusAgentRegistry {
         });
     }
 
-    /** Macchine dell'utente con un agente collegato in questo momento, in ordine di nome. */
+    /** The user's machines with an agent currently connected, ordered by name. */
     public List<AgentInfo> agents(Long userId) {
         return agentsByKey.entrySet().stream()
                 .filter(entry -> entry.getKey().userId().equals(userId) && !entry.getValue().isEmpty())
@@ -154,7 +154,7 @@ public class FocusAgentRegistry {
                 .toList();
     }
 
-    /** Heartbeat periodico: tiene aperta la connessione e scopre gli agenti che non ci sono più. */
+    /** Periodic heartbeat: keeps the connection open and detects agents that are gone. */
     @Scheduled(fixedDelayString = "PT20S")
     public void heartbeat() {
         for (List<Agent> agents : agentsByKey.values()) {
@@ -170,7 +170,7 @@ public class FocusAgentRegistry {
         return bytes;
     }
 
-    /** Invia l'evento a tutti gli agenti della macchina (solo a quelli con l'app Claude, se richiesto). */
+    /** Sends the event to all of the machine's agents (only those with the Claude app, if requested). */
     private boolean sendToAll(Long userId, String machine, boolean claudeAppOnly,
                               SseEmitter.SseEventBuilder event) {
         List<Agent> agents = agentsByKey.getOrDefault(new AgentKey(userId, machine), List.of());
@@ -193,7 +193,7 @@ public class FocusAgentRegistry {
         }
     }
 
-    /** Agente collegato da una macchina. */
+    /** Agent connected from a machine. */
     public record AgentInfo(String machine, boolean claudeApp) {
     }
 

@@ -1,5 +1,5 @@
-// Build di produzione con identificativo di build e chiave di licenza PrimeUI inseriti nel bundle.
-// Uso: node scripts/build.mjs [altre opzioni di ng build]
+// Production build with the build id and the PrimeUI license key embedded in the bundle.
+// Usage: node scripts/build.mjs [other ng build options]
 import { spawnSync } from 'node:child_process';
 
 import { defineArgs } from './defines.mjs';

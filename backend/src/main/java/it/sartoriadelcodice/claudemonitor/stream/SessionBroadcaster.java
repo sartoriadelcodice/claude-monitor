@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** Registro dei client SSE collegati, per utente, e invio degli aggiornamenti. */
+/** Registry of the connected SSE clients, by user, and delivery of updates. */
 @Component
 public class SessionBroadcaster {
 
@@ -21,7 +21,7 @@ public class SessionBroadcaster {
 
     public SseEmitter register(Long userId) {
         List<SseEmitter> emitters = emittersByUser.computeIfAbsent(userId, id -> new CopyOnWriteArrayList<>());
-        // Nessun timeout lato server: la connessione resta viva grazie agli heartbeat
+        // No server-side timeout: heartbeats keep the connection alive
         SseEmitter emitter = new SseEmitter(0L);
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> emitters.remove(emitter));
@@ -31,7 +31,7 @@ public class SessionBroadcaster {
         return emitter;
     }
 
-    /** Invia l'aggiornamento solo ai client del proprietario della sessione. */
+    /** Sends the update only to the clients of the session's owner. */
     public void broadcast(Long userId, SessionDto session) {
         List<SseEmitter> emitters = emittersByUser.getOrDefault(userId, List.of());
         for (SseEmitter emitter : emitters) {
@@ -39,7 +39,7 @@ public class SessionBroadcaster {
         }
     }
 
-    /** Heartbeat periodico: evita che proxy e tunnel chiudano la connessione inattiva. */
+    /** Periodic heartbeat: prevents proxies and tunnels from closing the idle connection. */
     @Scheduled(fixedDelayString = "PT20S")
     public void heartbeat() {
         for (List<SseEmitter> emitters : emittersByUser.values()) {

@@ -1,6 +1,6 @@
-# Claude Monitor: backend, frontend (nginx) e PostgreSQL.
-# Il frontend è l'unico punto di ingresso: va messo dietro un reverse proxy HTTPS.
-# Per i test locali con HTTPS pubblico: docker compose --profile tunnel up -d
+# Claude Monitor: backend, frontend (nginx) and PostgreSQL.
+# The frontend is the only entry point: put it behind an HTTPS reverse proxy.
+# For local testing with public HTTPS: docker compose --profile tunnel up -d
 services:
   postgres:
     image: postgres:17-alpine
@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: claude_monitor
       POSTGRES_USER: claude_monitor
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Imposta DB_PASSWORD nel file .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the .env file}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -27,23 +27,23 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/claude_monitor
       DB_USER: claude_monitor
       DB_PASSWORD: ${DB_PASSWORD}
-      # Facoltativo: vecchio token condiviso, importato come chiave hook dell'amministratore
+      # Optional: old shared token, imported as a hook key of the administrator
       HOOK_TOKEN: ${HOOK_TOKEN:-}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Imposta ADMIN_PASSWORD nel file .env}
-      JWT_SECRET: ${JWT_SECRET:?Imposta JWT_SECRET nel file .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the .env file}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the .env file}
       JWT_TTL: ${JWT_TTL:-30d}
       STALE_AFTER: ${STALE_AFTER:-30m}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
     ports:
-      # Solo in locale, per lo sviluppo del frontend con ng serve
+      # Local only, for frontend development with ng serve
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
 
   frontend:
     build:
-      # Il contesto è la radice: la build include gli script di hooks/, scaricabili dalla dashboard
+      # The context is the repository root: the build includes the scripts in hooks/, downloadable from the dashboard
       context: .
       dockerfile: frontend/Dockerfile
       args:
@@ -54,9 +54,9 @@ services:
     ports:
       - "${FRONTEND_PORT:-8088}:80"
 
-  # Tunnel Cloudflare per i test locali (profilo "tunnel"), gestito dalla dashboard Cloudflare:
-  # hostname pubblico e servizio di destinazione (http://frontend:80) si configurano lì.
-  # Protocollo http2 forzato: QUIC (UDP) è spesso bloccato o instabile.
+  # Cloudflare tunnel for local testing ("tunnel" profile), managed from the Cloudflare dashboard:
+  # the public hostname and the target service (http://frontend:80) are configured there.
+  # http2 protocol forced: QUIC (UDP) is often blocked or unstable.
   cloudflared:
     image: cloudflare/cloudflared:latest
     profiles: ["tunnel"]

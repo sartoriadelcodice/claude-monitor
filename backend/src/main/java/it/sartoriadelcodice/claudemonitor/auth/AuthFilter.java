@@ -22,15 +22,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Legge l'header Authorization: Bearer.
- * Su /api/events e /api/agent/ il valore è una chiave hook (ruolo HOOK); altrove è il JWT del frontend
- * (ruolo USER o ADMIN).
+ * Reads the Authorization: Bearer header.
+ * On /api/events and /api/agent/ the value is a hook key (HOOK role); elsewhere it is the frontend JWT
+ * (USER or ADMIN role).
  */
 @Component
 public class AuthFilter extends OncePerRequestFilter {
 
     public static final String EVENTS_PATH = "/api/events";
-    /** Endpoint usati dall'agente che gira sulle macchine monitorate: stessa chiave degli hook. */
+    /** Endpoints used by the agent running on the monitored machines: same key as the hooks. */
     public static final String AGENT_PATH_PREFIX = "/api/agent/";
 
     private static final String BEARER = "Bearer ";
@@ -56,7 +56,7 @@ public class AuthFilter extends OncePerRequestFilter {
                 hookKeyService.authenticate(token)
                         .ifPresent(user -> authenticate(user, List.of(SecurityConfig.ROLE_HOOK)));
             } else {
-                // L'utente si rilegge a ogni richiesta: disattivazione e cambio ruolo hanno effetto subito
+                // The user is reloaded on every request, so deactivation and role changes take effect immediately
                 jwtService.verify(token)
                         .flatMap(users::findById)
                         .filter(u -> u.isEnabled())

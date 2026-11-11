@@ -13,9 +13,9 @@
 
     <groupId>it.sartoriadelcodice</groupId>
     <artifactId>claude-monitor</artifactId>
-    <version>0.6.2</version>
+    <version>0.7.0</version>
     <name>claude-monitor</name>
-    <description>Dashboard di monitoraggio delle sessioni Claude Code</description>
+    <description>Monitoring dashboard for Claude Code sessions</description>
 
     <properties>
         <java.version>21</java.version>
@@ -60,7 +60,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- JWT per il frontend -->
+        <!-- JWT for the frontend -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>

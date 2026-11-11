@@ -1,7 +1,7 @@
 {
   "env": {
     "CLAUDE_MONITOR_URL": "https://monitor.example.com",
-    "CLAUDE_MONITOR_TOKEN": "cmk_la-tua-chiave-hook"
+    "CLAUDE_MONITOR_TOKEN": "cmk_your-hook-key"
   },
   "hooks": {
     "SessionStart": [

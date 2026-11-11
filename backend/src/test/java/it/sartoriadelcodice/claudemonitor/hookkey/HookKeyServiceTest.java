@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** Test delle chiavi hook: creazione, verifica tramite hash, revoca. */
+/** Tests for hook keys: creation, verification via hash, revocation. */
 class HookKeyServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-10T10:00:00Z");
@@ -87,7 +87,7 @@ class HookKeyServiceTest {
     void unknownKeyIsRejected() {
         service.create(USER_ID, "MacBook");
 
-        assertThat(service.authenticate("cmk_sconosciuta")).isEmpty();
+        assertThat(service.authenticate("cmk_unknown")).isEmpty();
         assertThat(service.authenticate("")).isEmpty();
         assertThat(service.authenticate(null)).isEmpty();
     }
@@ -119,12 +119,12 @@ class HookKeyServiceTest {
 
     @Test
     void legacyTokenIsImportedOnlyOnce() {
-        assertThat(service.importLegacyKey(USER_ID, "vecchio-token", "HOOK_TOKEN")).isTrue();
-        assertThat(service.authenticate("vecchio-token")).isPresent();
+        assertThat(service.importLegacyKey(USER_ID, "old-token", "HOOK_TOKEN")).isTrue();
+        assertThat(service.authenticate("old-token")).isPresent();
 
-        // Dopo la revoca non viene ricreato al riavvio
+        // After revocation it is not recreated on restart
         service.revoke(USER_ID, store.get(0).getId());
-        assertThat(service.importLegacyKey(USER_ID, "vecchio-token", "HOOK_TOKEN")).isFalse();
-        assertThat(service.authenticate("vecchio-token")).isEmpty();
+        assertThat(service.importLegacyKey(USER_ID, "old-token", "HOOK_TOKEN")).isFalse();
+        assertThat(service.authenticate("old-token")).isEmpty();
     }
 }

@@ -18,15 +18,15 @@ import it.sartoriadelcodice.claudemonitor.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Creazione, verifica e revoca delle chiavi hook. */
+/** Creation, verification and revocation of hook keys. */
 @Service
 public class HookKeyService {
 
-    /** Prefisso che rende riconoscibili le chiavi (utile anche agli scanner di segreti). */
+    /** Prefix that makes the keys recognizable (also useful to secret scanners). */
     public static final String KEY_PREFIX = "cmk_";
 
     private static final int PREFIX_LENGTH = KEY_PREFIX.length() + 6;
-    /** L'ultimo utilizzo si aggiorna al massimo una volta al minuto, non a ogni evento. */
+    /** The last use is updated at most once a minute, not on every event. */
     private static final Duration LAST_USED_RESOLUTION = Duration.ofMinutes(1);
 
     private final HookKeyRepository keys;
@@ -40,7 +40,7 @@ public class HookKeyService {
         this.clock = clock;
     }
 
-    /** Crea una chiave: quella in chiaro è restituita solo qui e non è più recuperabile. */
+    /** Creates a key: the plain key is returned only here and cannot be retrieved later. */
     @Transactional
     public CreatedKey create(Long userId, String name) {
         byte[] bytes = new byte[32];
@@ -52,9 +52,9 @@ public class HookKeyService {
     }
 
     /**
-     * Importa come chiave un token già esistente (il vecchio HOOK_TOKEN condiviso).
+     * Imports an existing token as a key (the old shared HOOK_TOKEN).
      *
-     * @return false se era già stato importato, anche se poi revocato
+     * @return false if it was already imported, even if later revoked
      */
     @Transactional
     public boolean importLegacyKey(Long userId, String plain, String name) {
@@ -67,7 +67,7 @@ public class HookKeyService {
         return true;
     }
 
-    /** Riconosce la chiave presentata da un hook; vuoto se sconosciuta, revocata o di un utente disattivato. */
+    /** Recognizes the key presented by a hook; empty if unknown, revoked or belonging to a disabled user. */
     @Transactional
     public Optional<AuthUser> authenticate(String plain) {
         if (plain == null || plain.isBlank()) {
@@ -96,7 +96,7 @@ public class HookKeyService {
         return keys.findByUserIdOrderByCreatedAtDesc(userId).stream().map(HookKeyDto::from).toList();
     }
 
-    /** Revoca una chiave dell'utente; false se non esiste o non è sua. */
+    /** Revokes one of the user's keys; false if it does not exist or is not theirs. */
     @Transactional
     public boolean revoke(Long userId, Long keyId) {
         return keys.findByIdAndUserId(keyId, userId).map(key -> {
@@ -108,7 +108,7 @@ public class HookKeyService {
         }).orElse(false);
     }
 
-    /** Hash SHA-256 in esadecimale. La chiave è casuale e lunga: non servono sale né funzioni lente. */
+    /** Hex-encoded SHA-256 hash. The key is long and random: no salt or slow hash function is needed. */
     static String hash(String plain) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(plain.getBytes(StandardCharsets.UTF_8));

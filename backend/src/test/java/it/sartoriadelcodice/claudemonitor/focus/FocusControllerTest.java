@@ -43,7 +43,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** Test del focus: stream dell'agente con chiave hook, richiesta dalla dashboard con JWT, isolamento tra utenti. */
+/** Focus tests: agent stream with the hook key, request from the dashboard with a JWT, isolation between users. */
 @WebMvcTest(FocusController.class)
 @Import({SecurityConfig.class, AuthFilter.class, JwtService.class, FocusAgentRegistry.class, FocusService.class})
 @EnableConfigurationProperties(MonitorProperties.class)
@@ -84,12 +84,12 @@ class FocusControllerTest {
         when(hookKeyService.authenticate(HOOK_KEY))
                 .thenReturn(Optional.of(new AuthUser(USER_ID, "mario", Role.USER)));
         for (Long id : new Long[] {USER_ID, OTHER_USER_ID}) {
-            // Utente vero e non simulato: l'interruttore del focus deve cambiare davvero
-            User user = new User("utente" + id, "hash", Role.USER, Instant.parse("2026-11-10T10:00:00Z"));
+            // Real, not mocked, user: the focus switch must actually change
+            User user = new User("user" + id, "hash", Role.USER, Instant.parse("2026-11-10T10:00:00Z"));
             ReflectionTestUtils.setField(user, "id", id);
             when(userRepository.findById(id)).thenReturn(Optional.of(user));
         }
-        // Il registro è condiviso tra i test della classe: ognuno parte senza agenti collegati
+        // The registry is shared by the tests of the class: each one starts with no agents connected
         registry.disconnect(USER_ID);
         registry.disconnect(OTHER_USER_ID);
         when(sessionService.find(any(), any())).thenReturn(Optional.empty());
@@ -130,8 +130,8 @@ class FocusControllerTest {
     }
 
     /**
-     * Fa rispondere l'agente alla prossima richiesta di inattività, come farebbe lo script sul Mac:
-     * aspetta l'evento "probe" sul suo stream e invia i secondi indicati.
+     * Makes the agent reply to the next idle-time request, as the script on the Mac would:
+     * waits for the "probe" event on its stream and sends the given seconds.
      */
     private Thread answerProbe(MvcResult agent, String machine, long idle) {
         Thread thread = new Thread(() -> {
@@ -157,16 +157,16 @@ class FocusControllerTest {
 
     @Test
     void agentStreamRequiresHookKey() throws Exception {
-        mockMvc.perform(get("/api/agent/stream").param("machine", "intruso"))
+        mockMvc.perform(get("/api/agent/stream").param("machine", "intruder"))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/agent/stream").param("machine", "intruso")
+        mockMvc.perform(get("/api/agent/stream").param("machine", "intruder")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer wrong"))
                 .andExpect(status().isUnauthorized());
-        // Il JWT del frontend non apre lo stream dell'agente
-        mockMvc.perform(get("/api/agent/stream").param("machine", "intruso")
+        // The frontend JWT does not open the agent stream
+        mockMvc.perform(get("/api/agent/stream").param("machine", "intruder")
                         .header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isUnauthorized());
-        assertThat(machines(USER_ID)).doesNotContain("intruso");
+        assertThat(machines(USER_ID)).doesNotContain("intruder");
     }
 
     @Test
@@ -195,7 +195,7 @@ class FocusControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.machine").value("macbook"))
                 .andExpect(jsonPath("$.claudeApp").value(false));
-        // L'agente di un'altra macchina non riceve il comando
+        // The agent of another machine does not receive the command
         mockMvc.perform(post("/api/sessions/other-machine/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isConflict());
     }
@@ -230,7 +230,7 @@ class FocusControllerTest {
                 .andExpect(jsonPath("$.length()").value(0));
         mockMvc.perform(post("/api/sessions/abc123/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isForbidden());
-        // Un agente che riprova a collegarsi viene respinto finché l'interruttore resta spento
+        // An agent that tries to reconnect is rejected while the switch stays off
         mockMvc.perform(get("/api/agent/stream").param("machine", "macbook")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + HOOK_KEY))
                 .andExpect(status().isForbidden());
@@ -244,14 +244,14 @@ class FocusControllerTest {
 
     @Test
     void switchBelongsToTheUserAndNeedsJwt() throws Exception {
-        // La chiave hook non può riaccendere il focus
+        // The hook key cannot turn focus back on
         mockMvc.perform(put("/api/focus/settings").header(HttpHeaders.AUTHORIZATION, "Bearer " + HOOK_KEY)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
                 .andExpect(status().isUnauthorized());
 
         connectAgent("macbook");
         setFocusEnabled(OTHER_USER_ID, false);
-        // Lo spegnimento di un altro utente non tocca gli agenti di questo
+        // Another user turning focus off does not affect this user's agents
         assertThat(machines(USER_ID)).contains("macbook");
         mockMvc.perform(get("/api/focus/settings").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(jsonPath("$.enabled").value(true));
@@ -267,20 +267,20 @@ class FocusControllerTest {
     @Test
     void remoteSessionOpensInClaudeAppOfTheMacInUse() throws Exception {
         when(sessionService.find(USER_ID, "remote-in-use"))
-                .thenReturn(Optional.of(session("mac-sessione", REMOTE_ID)));
-        MvcResult home = connectAgent("mac-sessione", false);
-        MvcResult viewer = connectAgent("mac-in-uso", true);
-        Thread homeReply = answerProbe(home, "mac-sessione", 900);
-        Thread viewerReply = answerProbe(viewer, "mac-in-uso", 4);
+                .thenReturn(Optional.of(session("session-mac", REMOTE_ID)));
+        MvcResult home = connectAgent("session-mac", false);
+        MvcResult viewer = connectAgent("mac-in-use", true);
+        Thread homeReply = answerProbe(home, "session-mac", 900);
+        Thread viewerReply = answerProbe(viewer, "mac-in-use", 4);
 
         mockMvc.perform(post("/api/sessions/remote-in-use/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.machine").value("mac-in-uso"))
+                .andExpect(jsonPath("$.machine").value("mac-in-use"))
                 .andExpect(jsonPath("$.claudeApp").value(true));
         homeReply.join(2_000);
         viewerReply.join(2_000);
 
-        // All'altro Mac arriva solo l'identificativo del controllo remoto; quello della sessione non fa nulla
+        // The other Mac only receives the Remote Control identifier; the session's Mac does nothing
         assertThat(stream(viewer)).contains("event:remote\ndata:" + REMOTE_ID);
         assertThat(stream(home)).doesNotContain("event:focus");
     }
@@ -288,16 +288,16 @@ class FocusControllerTest {
     @Test
     void sessionMacWinsWhenItIsTheOneInUse() throws Exception {
         when(sessionService.find(USER_ID, "remote-at-home"))
-                .thenReturn(Optional.of(session("mac-casa", REMOTE_ID)));
-        MvcResult home = connectAgent("mac-casa", false);
-        MvcResult viewer = connectAgent("mac-studio", true);
-        Thread homeReply = answerProbe(home, "mac-casa", 3);
-        Thread viewerReply = answerProbe(viewer, "mac-studio", 3);
+                .thenReturn(Optional.of(session("home-mac", REMOTE_ID)));
+        MvcResult home = connectAgent("home-mac", false);
+        MvcResult viewer = connectAgent("studio-mac", true);
+        Thread homeReply = answerProbe(home, "home-mac", 3);
+        Thread viewerReply = answerProbe(viewer, "studio-mac", 3);
 
-        // A parità di inattività resta la finestra sul Mac della sessione
+        // With equal idle time, the window on the session's Mac is kept
         mockMvc.perform(post("/api/sessions/remote-at-home/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.machine").value("mac-casa"))
+                .andExpect(jsonPath("$.machine").value("home-mac"))
                 .andExpect(jsonPath("$.claudeApp").value(false));
         homeReply.join(2_000);
         viewerReply.join(2_000);
@@ -308,22 +308,22 @@ class FocusControllerTest {
 
     @Test
     void remoteSessionOfMachineWithoutAgentOpensInClaudeApp() throws Exception {
-        MvcResult viewer = connectAgent("mac-unico", true);
+        MvcResult viewer = connectAgent("only-mac", true);
 
-        // Una sola macchina possibile: nessuna richiesta di inattività
+        // Only one possible machine: no idle-time request
         mockMvc.perform(post("/api/sessions/remote-linux/focus").header(HttpHeaders.AUTHORIZATION, jwt(OTHER_USER_ID)))
                 .andExpect(status().isNotFound());
         mockMvc.perform(post("/api/sessions/remote-linux/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.machine").value("mac-unico"))
+                .andExpect(jsonPath("$.machine").value("only-mac"))
                 .andExpect(jsonPath("$.claudeApp").value(true));
         assertThat(stream(viewer)).doesNotContain("event:probe").contains("event:remote\ndata:" + REMOTE_ID);
     }
 
     @Test
     void sessionWithoutRemoteControlNeverLeavesItsMachine() throws Exception {
-        connectAgent("mac-con-app", true);
-        // Il Mac con l'app Claude non serve: senza controllo remoto la sessione si apre solo dove gira
+        connectAgent("mac-with-app", true);
+        // The Mac with the Claude app is not used: without Remote Control the session opens only where it runs
         mockMvc.perform(post("/api/sessions/other-machine/focus").header(HttpHeaders.AUTHORIZATION, jwt(USER_ID)))
                 .andExpect(status().isConflict());
     }

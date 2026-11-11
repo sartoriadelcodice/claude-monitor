@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Chiavi hook dell'utente collegato. */
+/** Hook keys of the logged-in user. */
 @RestController
 @RequestMapping("/api/hook-keys")
 public class HookKeyController {
@@ -36,7 +36,7 @@ public class HookKeyController {
         return hookKeyService.list(user.id());
     }
 
-    /** Crea una chiave. Il campo "key" con la chiave in chiaro compare solo in questa risposta. */
+    /** Creates a key. The "key" field with the plain key appears only in this response. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CreatedResponse create(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody CreateRequest request) {
@@ -49,7 +49,7 @@ public class HookKeyController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revoke(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) {
         if (!hookKeyService.revoke(user.id(), id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chiave non trovata");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Key not found");
         }
     }
 

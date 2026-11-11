@@ -2,7 +2,7 @@ package it.sartoriadelcodice.claudemonitor.session;
 
 import java.time.Instant;
 
-/** Rappresentazione di una sessione esposta al frontend (REST e SSE). */
+/** Representation of a session exposed to the frontend (REST and SSE). */
 public record SessionDto(
         String id,
         String machine,

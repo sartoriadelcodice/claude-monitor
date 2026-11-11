@@ -18,7 +18,7 @@ interface LoginResponse extends CurrentUser {
   expiresAt: string;
 }
 
-/** Login e custodia del JWT e dei dati dell'utente collegato. */
+/** Sign-in and storage of the JWT and of the signed-in user's data. */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -43,7 +43,7 @@ export class AuthService {
     this.user.set(user);
   }
 
-  /** Rilegge nome e ruolo dal server: serve a chi aveva già un token e dopo un cambio di ruolo. */
+  /** Reloads name and role from the server: needed by those who already had a token and after a role change. */
   async refreshUser(): Promise<void> {
     try {
       const me = await firstValueFrom(this.http.get<CurrentUser>('api/me'));
@@ -51,7 +51,7 @@ export class AuthService {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       this.user.set(user);
     } catch {
-      // Il 401 è gestito dall'interceptor; per gli altri errori restano i dati salvati
+      // 401 is handled by the interceptor; on other errors the saved data stays
     }
   }
 

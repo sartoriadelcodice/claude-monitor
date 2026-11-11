@@ -1,10 +1,10 @@
 import { version } from '../../../package.json';
 
-/** Sostituita in fase di build da scripts/build.mjs; assente con ng serve. */
+/** Replaced at build time by scripts/build.mjs; missing with ng serve. */
 declare const APP_BUILD_ID: string | undefined;
 
-/** Versione dell'app: quella di package.json, da incrementare a ogni rilascio. */
+/** App version: the one in package.json, to be bumped at every release. */
 export const APP_VERSION: string = version;
 
-/** Identificativo della build (data e ora UTC), utile per distinguere due build della stessa versione. */
-export const APP_BUILD: string = typeof APP_BUILD_ID === 'string' ? APP_BUILD_ID : 'sviluppo';
+/** Build identifier (UTC date and time), to tell apart two builds of the same version; null in development. */
+export const APP_BUILD: string | null = typeof APP_BUILD_ID === 'string' ? APP_BUILD_ID : null;

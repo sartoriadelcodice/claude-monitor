@@ -1,286 +1,316 @@
+<div align="center">
+
+<img src="frontend/public/icons/icon-192x192.png" alt="Claude Monitor logo" width="96" height="96" />
+
 # Claude Monitor
 
-Dashboard per vedere a colpo d'occhio lo stato di tutte le sessioni [Claude Code](https://claude.com/claude-code)
-attive su più macchine. Evidenzia quelle ferme in attesa (permesso richiesto, input richiesto, risposta
-terminata), suona un avviso e manda una notifica push. Pensata per essere installata come PWA su iPad.
+**A self-hosted, real-time dashboard for all your Claude Code sessions — across every machine.**<br />
+Know at a glance which session needs a permission, which one is waiting for your reply and which ones are
+still working, with sound alerts and push notifications on your iPad, phone or desktop.
 
-Ogni macchina invia gli eventi delle proprie sessioni tramite gli hook di Claude Code; la dashboard li
-riceve, ne ricava lo stato e lo mostra in tempo reale. Si ospita in proprio con docker compose.
+[![CI](https://github.com/sartoriadelcodice/claude-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/sartoriadelcodice/claude-monitor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Java 21](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)](backend/pom.xml)
+[![Angular 22](https://img.shields.io/badge/Angular-22-dd0031?logo=angular&logoColor=white)](frontend/package.json)
+[![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa&logoColor=white)](#install-it-on-ipad-and-iphone)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## Funzioni
+[Website](https://sartoriadelcodice.github.io/claude-monitor/) ·
+[Quick start](#quick-start) ·
+[User guide](docs/user-guide.md) ·
+[Hooks](hooks/README.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[🇮🇹 Italiano](README.it.md)
 
-- Card per ogni sessione con stato, cartella, nome della sessione, macchina, modello e tempo nello stato.
-- Contatore delle sessioni in attesa, sempre mostrate per prime; raggruppamento per cartella, device o entrambi.
-- Avviso sonoro (diverso per "richiede attenzione" e "tocca a te") e notifiche push.
-- Le sessioni che hanno finito di rispondere ma hanno ancora task in background sono distinte da quelle
-  che aspettano te: nessun avviso finché non tocca davvero a te.
-- Sessioni chiuse archiviate in automatico e consultabili nello storico.
-- Più utenti, ognuno con le proprie sessioni e le proprie chiavi hook.
-- PWA installabile che si aggiorna da sola quando viene pubblicata una nuova versione.
-- Tema scuro o chiaro, a scelta per ogni dispositivo.
+<img src="site/assets/screenshots/dashboard-dark.png" alt="Claude Monitor dashboard showing Claude Code sessions in different states" width="900" />
 
-## Stati di una sessione
+</div>
 
-| Stato               | Sulla card            | Significato                                                              | Avviso        |
-| ------------------- | --------------------- | ------------------------------------------------------------------------ | ------------- |
-| `NEEDS_ATTENTION`   | Richiede attenzione   | Claude aspetta un permesso o una risposta a una domanda                  | Suono e push  |
-| `WAITING_INPUT`     | Tocca a te            | Risposta terminata, nessun lavoro in corso                               | Suono e push  |
-| `WORKING`           | Al lavoro             | Claude sta lavorando                                                     | No            |
-| `BACKGROUND`        | In background         | Risposta terminata, ma con task in background o risvegli pianificati: ripartirà da sola | No |
-| `IDLE`              | In attesa del prompt  | Sessione aperta, nessun prompt ancora inviato                            | No            |
-| `STALE`             | Ferma                 | Nessun evento da più di `STALE_AFTER` (30 minuti se non impostato)       | No            |
-| `ENDED`             | Terminata             | Sessione chiusa: esce dalla vista principale e resta nello storico       | No            |
+## Why Claude Monitor?
 
-La corrispondenza tra eventi degli hook e stati è descritta in [hooks/README.md](hooks/README.md).
+Running Claude Code in several terminals, on more than one computer, means constantly checking windows to find
+out who is stuck on a permission prompt and who has finished and is waiting for you. Claude Monitor collects the
+[hook](https://code.claude.com/docs/en/hooks) events of every session and turns them into a single live
+board: the sessions that need you come first, glow until you look at them and ring a sound — so you can keep an
+iPad on the desk, walk away from the keyboard, and come back exactly when Claude needs you.
 
-## Architettura
+## Features
 
-- **Hook** (`hooks/`): uno script per macchina, bash oppure PowerShell, che inoltra gli eventi di Claude Code.
-  Con `jq` (o su Windows) toglie prima dell'invio i contenuti della conversazione: prompt, risposte di Claude,
-  input e output dei tool, comandi dei task in background. Il backend li scarta comunque prima di salvare.
-- **Backend** (`backend/`): Java 21, Spring Boot, PostgreSQL. Espone REST, aggiornamenti in tempo reale (SSE)
-  e Web Push.
-- **Frontend** (`frontend/`): Angular e PrimeNG, PWA. Il suo nginx è l'unico punto di ingresso e fa da proxy
-  verso il backend.
+- **Every session, every machine** — one card per Claude Code session with state, folder, session name, machine,
+  model and time in the current state, updated live over Server-Sent Events.
+- **Attention first** — a counter of the sessions waiting for you; cards sorted by urgency and groupable by folder,
+  device or both.
+- **Sound alerts and push notifications** — two distinct sounds for *Needs attention* and *Your turn*, optional
+  repetition until the card is seen, Web Push even when the app is closed.
+- **No false alarms** — sessions that finished answering but still run background tasks or scheduled wake-ups are
+  shown as *In background* and stay silent until it is really your turn.
+- **Jump to the window** *(macOS, optional)* — an "Open window" button brings the right terminal or the Claude app
+  to the front, on the Mac you are actually using; Remote Control sessions supported.
+- **Private by design** — the hook strips prompts, answers, tool input and output before sending; the server
+  drops them again before saving. Self-hosted: your data never leaves your infrastructure.
+- **Multi-user** — each user has their own sessions, hook keys and devices; administrators manage accounts.
+- **Installable PWA** — built for iPad and iPhone, works on any modern browser, updates itself, light and dark theme.
+- **English and Italian** — the interface follows the browser language or a per-device choice; translations are
+  plain JSON files, easy to extend.
+- **One-command install of the hooks** — create a key in the dashboard and download a ready-made script for
+  macOS, Linux or Windows.
 
-## Requisiti
+## Screenshots
 
-- Docker con docker compose.
-- Un indirizzo HTTPS per usare PWA e notifiche push (vedi [HTTPS](#https)).
-- Sulle macchine da monitorare: Claude Code e `curl`; `jq` è consigliato.
-- Una chiave di licenza PrimeUI, gratuita con la Community License (vedi sotto).
+<table>
+  <tr>
+    <td width="50%"><img src="site/assets/screenshots/dashboard-light.png" alt="Dashboard in the light theme" /></td>
+    <td width="50%"><img src="site/assets/screenshots/session-detail.png" alt="Session detail with the event history" /></td>
+  </tr>
+  <tr>
+    <td align="center">Light theme, cards grouped by device</td>
+    <td align="center">Session detail with the event history</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="site/assets/screenshots/settings.png" alt="Settings: language, sounds, notifications" /></td>
+    <td width="50%"><img src="site/assets/screenshots/dashboard-it.png" alt="The dashboard in Italian" /></td>
+  </tr>
+  <tr>
+    <td align="center">Settings: language, sounds, push, window focus</td>
+    <td align="center">Italian interface</td>
+  </tr>
+</table>
 
-## Avvio
+## How it works
 
-1. Crea il file di configurazione:
+```mermaid
+flowchart LR
+    subgraph machines["Your machines"]
+        cc1["Claude Code<br/>(macOS)"] -->|hook| h1["claude-monitor-hook.sh"]
+        cc2["Claude Code<br/>(Linux)"] -->|hook| h2["claude-monitor-hook.sh"]
+        cc3["Claude Code<br/>(Windows)"] -->|hook| h3["claude-monitor-hook.ps1"]
+        agent["Focus agent<br/>(macOS, optional)"]
+    end
+    subgraph server["Docker host"]
+        nginx["nginx + PWA"] --> api["Spring Boot API"]
+        api --> db[("PostgreSQL")]
+    end
+    h1 & h2 & h3 -->|"POST /api/events<br/>(hook key)"| nginx
+    api -->|"SSE"| ui["Dashboard<br/>iPad · phone · desktop"]
+    api -->|"Web Push"| ui
+    ui -->|"Open window"| api -->|"session id only"| agent
+```
 
-   ```bash
-   cp .env.example .env
-   ```
+1. A small script registered as a Claude Code hook sends each event (session start, prompt, tool use,
+   notification, stop…) to the backend, authenticated with a personal **hook key**.
+2. The backend maps events to a session state, stores them in PostgreSQL and pushes the change to every open
+   dashboard (SSE) and, when the session needs you, to your devices (Web Push).
+3. The dashboard plays a sound, highlights the card and, on macOS, can ask the optional agent to bring the session
+   window to the front.
 
-   Imposta `DB_PASSWORD`, `ADMIN_PASSWORD` e `JWT_SECRET`
-   (per i valori casuali: `openssl rand -hex 32`).
-   `ADMIN_USERNAME` e `ADMIN_PASSWORD` servono solo al primo avvio, per creare l'amministratore iniziale.
+### Session states
 
-   PrimeNG 22 richiede una chiave di licenza PrimeUI: si ottiene da <https://primeui.dev/licenses>
-   (la Community License è gratuita) e va in `PRIMENG_LICENSE`. Viene inserita nel bundle del frontend
-   durante la build; senza chiave la dashboard funziona ma mostra un avviso in basso a destra.
+| State             | Card label         | Meaning                                                                    | Alert        |
+| ----------------- | ------------------ | -------------------------------------------------------------------------- | ------------ |
+| `NEEDS_ATTENTION` | Needs attention    | Claude is waiting for a permission or an answer to a question              | Sound + push |
+| `WAITING_INPUT`   | Your turn          | The response is complete and no work is in progress                        | Sound + push |
+| `WORKING`         | Working            | Claude is working                                                          | —            |
+| `BACKGROUND`      | In background      | Response complete, but background tasks or scheduled wake-ups will resume it | —          |
+| `IDLE`            | Waiting for prompt | Session open, no prompt sent yet                                           | —            |
+| `STALE`           | Stale              | No events for longer than `STALE_AFTER` (30 minutes by default)            | —            |
+| `ENDED`           | Ended              | Session closed: it leaves the main view and stays in the history          | —            |
 
-2. Genera le chiavi VAPID per le notifiche push e copiale in `.env`:
+The full mapping between hook events and states is in [hooks/README.md](hooks/README.md#events-and-states).
+
+## Quick start
+
+**Requirements:** Docker with Docker Compose, and an HTTPS address for the PWA and push notifications
+(see [HTTPS](#https)). On the machines to monitor: Claude Code and `curl` (`jq` recommended).
+
+```bash
+git clone https://github.com/sartoriadelcodice/claude-monitor.git
+cd claude-monitor
+cp .env.example .env
+```
+
+1. Edit `.env`: set `DB_PASSWORD`, `ADMIN_PASSWORD` and `JWT_SECRET` (`openssl rand -hex 32` gives a good random
+   value). `ADMIN_USERNAME` and `ADMIN_PASSWORD` are used only on first start, to create the initial administrator.
+2. Get a free PrimeUI Community License key from <https://primeui.dev/licenses> and put it in `PRIMENG_LICENSE`.
+   PrimeNG 22 requires it; without it the dashboard works but shows a notice in a corner.
+3. Generate the VAPID keys for push notifications and copy them into `.env`:
 
    ```bash
    scripts/generate-vapid-keys.sh
    ```
 
-3. Avvia lo stack:
+4. Start the stack:
 
    ```bash
    docker compose up -d --build
    ```
 
-   La dashboard risponde su `http://localhost:8088` (porta configurabile con `FRONTEND_PORT`).
+   The dashboard answers on <http://localhost:8088> (`FRONTEND_PORT` changes the port).
 
-4. Accedi, crea una chiave hook (pulsante con la chiave, in alto) e installa gli hook su ogni macchina
-   da monitorare: vedi [hooks/README.md](hooks/README.md).
+5. Sign in, create a **hook key** (key button at the top) and download the installation script for the machine:
+   it installs the hook and updates the global Claude Code settings, after backing them up.
+   Manual installation is described in [hooks/README.md](hooks/README.md).
 
-## Utenti e chiavi hook
+Start a new Claude Code session on that machine: its card appears on the dashboard.
 
-- Ogni utente vede solo le proprie sessioni e riceve solo le proprie notifiche.
-- Una sessione appartiene all'utente che ha creato la chiave hook usata dalla macchina.
-- Le chiavi hook si creano e si revocano dalla dashboard. Nel database resta solo il loro hash SHA-256:
-  la chiave in chiaro si vede una volta sola, alla creazione.
-- Gli utenti li crea un amministratore dalla dashboard; non c'è registrazione libera.
-  Un utente disattivato perde subito l'accesso e le sue chiavi smettono di funzionare.
+> **Just want to look around?** `scripts/demo-events.sh http://localhost:8088 <hook-key> seed` fills the dashboard
+> with fake sessions in every state; `live` keeps them changing, to hear the alerts.
 
-## HTTPS
+### Install it on iPad and iPhone
 
-PWA, service worker e notifiche push richiedono HTTPS.
+1. Open the dashboard in Safari through its HTTPS address.
+2. Share → **Add to Home Screen**.
+3. Open the app from the Home Screen and sign in.
+4. Tap **Enable sounds** and **Enable notifications**.
 
-- **Produzione**: metti il servizio `frontend` dietro il tuo reverse proxy HTTPS.
-  Il proxy deve lasciar passare lo stream SSE di `/api/stream` senza buffering e con timeout lungo.
-- **Test locali**: il profilo `tunnel` avvia cloudflared con protocollo `http2`.
-  Il tunnel è gestito dalla dashboard Cloudflare (Zero Trust → Networks → Tunnels):
-  lì si aggiunge l'hostname pubblico con servizio `http://frontend:80`.
-  Copia il token del tunnel in `CLAUDE_MONITOR_TUNNEL_TOKEN` nel file `.env`, poi:
+Push notifications on iPadOS and iOS work only from the installed app (16.4 or later).
 
-  ```bash
-  docker compose --profile tunnel up -d
-  ```
+## Configuration
 
-## Installazione su iPad
+All settings are environment variables, read from `.env` by Docker Compose
+(see [.env.example](.env.example)).
 
-1. Apri la dashboard in Safari tramite l'indirizzo HTTPS.
-2. Condividi → «Aggiungi alla schermata Home».
-3. Apri l'app dalla Home ed esegui l'accesso.
-4. Tocca «Attiva suoni» e «Attiva notifiche».
+| Variable                      | Default                   | Description                                                        |
+| ----------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| `DB_PASSWORD`                 | —                         | PostgreSQL password (required)                                     |
+| `ADMIN_USERNAME`              | `admin`                   | Initial administrator, created only when no user exists            |
+| `ADMIN_PASSWORD`              | —                         | Password of the initial administrator (required)                   |
+| `JWT_SECRET`                  | —                         | Secret that signs the login tokens, at least 32 characters (required) |
+| `JWT_TTL`                     | `30d`                     | How long a login lasts                                             |
+| `STALE_AFTER`                 | `30m`                     | Time without events after which a session becomes *Stale*          |
+| `VAPID_PUBLIC_KEY`            | —                         | Web Push public key; push is disabled when empty                   |
+| `VAPID_PRIVATE_KEY`           | —                         | Web Push private key                                               |
+| `VAPID_SUBJECT`               | `mailto:admin@example.com`| Contact required by the Web Push protocol                          |
+| `PRIMENG_LICENSE`             | —                         | PrimeUI license key, embedded in the frontend at build time        |
+| `HOOK_TOKEN`                  | —                         | Legacy shared token, imported as a hook key of the administrator  |
+| `FRONTEND_PORT`               | `8088`                    | Host port of the dashboard                                         |
+| `BACKEND_PORT`                | `8080`                    | Host port of the API, bound to localhost (for frontend development) |
+| `CLAUDE_MONITOR_TUNNEL_TOKEN` | —                         | Cloudflare tunnel token for the `tunnel` profile                   |
 
-Le notifiche push su iPadOS funzionano solo dalla PWA installata (iPadOS 16.4 o successivo).
+### HTTPS
 
-## Manuale d'uso
+PWAs, service workers and push notifications require HTTPS.
 
-### La schermata principale
+- **Production:** put the `frontend` service behind your HTTPS reverse proxy. The proxy must pass the SSE stream of
+  `/api/stream` without buffering and with a long timeout.
+- **Local testing:** the `tunnel` profile starts [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+  with the `http2` protocol. Create the tunnel in the Cloudflare dashboard (Zero Trust → Networks → Tunnels), add a
+  public hostname pointing to `http://frontend:80`, copy the token into `CLAUDE_MONITOR_TUNNEL_TOKEN` and run
+  `docker compose --profile tunnel up -d`.
 
-In alto a sinistra c'è il contatore delle sessioni che ti aspettano («Richiede attenzione» e «Tocca a te»):
-diventa rosso quando ce n'è almeno una. A destra ci sono, nell'ordine:
+## Usage
 
-| Comando                      | A cosa serve                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------- |
-| «In tempo reale»             | Stato del collegamento con il server; «Riconnessione…» quando è caduto       |
-| Elenco delle macchine        | Mostra solo le sessioni di una macchina (compare se le macchine sono più di una) |
-| Altoparlante                 | Muta o riattiva i suoni su questo dispositivo                                |
-| Sole o luna                  | Passa dal tema scuro a quello chiaro e viceversa                             |
-| Chiave                       | Chiavi hook: collega una nuova macchina o revoca una chiave                  |
-| Persone                      | Gestione degli utenti (solo per gli amministratori)                          |
-| Ingranaggio                  | Impostazioni                                                                 |
+The [user guide](docs/user-guide.md) covers the main screen, cards, session detail, connecting machines, sounds,
+push notifications, window focus, settings and user management.
 
-Sotto, «Raggruppa per» divide le card per cartella, per device o per entrambi. I gruppi con sessioni che ti
-aspettano vengono per primi.
+## Security and privacy
 
-### Le card
+- Expose the service only over HTTPS, behind a reverse proxy or a tunnel: the frontend port speaks plain HTTP.
+- The hook removes prompts, Claude's answers, tool input and output and background task commands before sending
+  (with `jq`, or always on Windows); the backend strips them again before saving.
+- Passwords are stored with bcrypt, hook keys only as SHA-256 hashes. A hook key can only send events and listen
+  for focus requests addressed to its own machine: it can't read sessions or history.
+- Window focus is opt-in on every Mac. The agent receives only a session identifier, never commands, never sends
+  keystrokes and needs no Accessibility permission; it locks itself on anomalous traffic and only a command typed
+  on the Mac unlocks it. A per-user switch in the settings turns focus off for every machine at once.
+- Sign-in attempts are rate limited by nginx (10 per minute).
 
-Ogni card è una sessione di Claude Code e mostra lo stato, la cartella da cui è stata avviata, il nome della
-sessione (se ne ha uno), la macchina, il modello in uso e da quanto tempo è in quello stato. Quando Claude
-chiede un permesso o fa una domanda, sulla card compare anche il testo della richiesta.
-
-Le card sono ordinate per urgenza: prima «Richiede attenzione», poi «Tocca a te», poi le altre. Il significato
-degli stati è nella tabella [Stati di una sessione](#stati-di-una-sessione).
-
-Una card che ti aspetta e che non hai ancora visto è evidenziata con il colore del suo stato.
-
-- **Primo tocco su una card evidenziata**: la segna come vista. Si spegne l'evidenziazione e, se è attiva,
-  la ripetizione del suono. Il dettaglio non si apre.
-- **Tocco su una card non evidenziata**: apre il dettaglio.
-
-Se la sessione cambia di nuovo stato, la card torna evidenziata.
-
-### Il dettaglio di una sessione
-
-Mostra lo stato, il percorso completo della cartella, l'ultimo messaggio di Claude Code e la cronologia degli
-eventi ricevuti, dal più recente, con lo stato in cui hanno portato la sessione.
-
-«Archivia» toglie la sessione dalla vista principale; resta nello storico, da cui si può riportare con
-«Ripristina». Le sessioni chiuse vengono archiviate da sole. Una sessione archiviata che riprende a lavorare
-torna nella vista principale.
-
-### Collegare una macchina
-
-1. Tocca il pulsante con la chiave e crea una chiave hook, dandole il nome della macchina.
-2. La chiave compare in chiaro una volta sola: copiala subito oppure usa l'installazione automatica.
-3. **Installazione automatica**: scegli il sistema (macOS e Linux oppure Windows), scarica lo script ed
-   eseguilo sulla macchina da collegare. Installa l'hook e aggiorna le impostazioni globali di Claude Code,
-   dopo averne salvato una copia di sicurezza. Poi elimina lo script, perché contiene la chiave.
-4. Apri una nuova sessione di Claude Code su quella macchina: la card compare nella dashboard.
-
-Quando Claude Monitor viene aggiornato, lo script dell'hook può cambiare. In fondo alla finestra «Chiavi hook»
-c'è il comando per riscaricarlo su una macchina già collegata, senza creare una chiave nuova.
-
-Conviene una chiave per macchina: se serve se ne revoca una sola. L'elenco mostra per ogni chiave la data di
-creazione e l'ultimo uso. L'installazione manuale è descritta in [hooks/README.md](hooks/README.md).
-
-### Suoni
-
-Al primo accesso tocca «Attiva suoni». I suoni sono due: uno più insistente per «Richiede attenzione» e uno
-più discreto per «Tocca a te». Partono solo quando una sessione entra in quello stato.
-
-Nelle impostazioni puoi regolare il volume, provare i due suoni e attivare la ripetizione del suono di
-«Richiede attenzione»: si ripete all'intervallo scelto finché la card non viene vista.
-
-Su iPad il browser riattiva l'audio solo dopo un tocco: a ogni apertura dell'app basta toccare un punto
-qualsiasi dello schermo. La riga «Stato audio» nelle impostazioni dice se l'audio è attivo.
-
-### Notifiche push
-
-Tocca «Attiva notifiche» e concedi il permesso: ricevi una notifica quando una sessione entra in «Richiede
-attenzione» o «Tocca a te», anche con l'app chiusa. Toccando la notifica si apre la dashboard.
-
-Le notifiche si attivano per dispositivo: dalle impostazioni puoi spegnerle su un dispositivo e lasciarle
-attive sugli altri. Su iPad e iPhone funzionano solo dall'app aggiunta alla schermata Home.
-
-### Impostazioni
-
-| Sezione         | Cosa contiene                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------ |
-| Suoni           | Attivazione, volume, prova dei suoni, stato dell'audio, ripetizione e suo intervallo        |
-| Notifiche push  | Attivazione su questo dispositivo                                                          |
-| Vista           | Storico delle sessioni terminate e archiviate; ingrandimento temporaneo della card che passa a uno stato che ti aspetta, e sua durata |
-| Versione        | Versione e build installate, controllo degli aggiornamenti                                 |
-| Account         | Cambio della password e uscita                                                             |
-
-Tema, suoni, raggruppamento e le altre preferenze sono salvate sul dispositivo: ogni dispositivo ha le sue.
-
-L'app si aggiorna da sola: controlla ogni cinque minuti e quando torna in primo piano, e se trova una nuova
-versione la installa e si ricarica.
-
-### Utenti
-
-Solo gli amministratori vedono il pulsante degli utenti. Da lì si creano nuovi utenti (password di almeno
-10 caratteri), si reimposta una password, si cambia il ruolo tra utente e amministratore e si disattiva o
-riattiva un utente. Ogni utente crea poi le proprie chiavi hook e vede soltanto le proprie sessioni.
-
-## Sicurezza
-
-- Il servizio va esposto solo in HTTPS, dietro un reverse proxy o un tunnel: la porta del frontend parla HTTP.
-- Le password sono salvate con bcrypt, le chiavi hook solo come hash SHA-256. Una chiave hook può soltanto
-  inviare eventi e ascoltare le richieste di focus destinate alla propria macchina: non legge sessioni né
-  cronologia e non può chiedere il focus.
-- Il focus delle finestre è facoltativo e si attiva a mano su ogni Mac. La richiesta parte solo dalla
-  dashboard di un utente autenticato, per una sua sessione; all'agente arriva soltanto l'identificativo della
-  sessione, e la finestra da portare avanti la ricava da un file locale scritto dall'hook. L'agente non
-  esegue comandi ricevuti dalla rete, non invia tasti e non usa i permessi di Accessibilità: chi controllasse
-  il server potrebbe al più portare in primo piano la finestra di una sessione.
-- L'agente riconosce le richieste anomale (identificativi malformati, sessioni che il Mac non conosce,
-  raffiche, volumi fuori misura) e si blocca da solo: si scollega, avvisa con una notifica e riparte solo
-  con un comando dato sul Mac. Si collega soltanto in https.
-- Nelle impostazioni della dashboard un interruttore spegne il focus per tutte le macchine e le sessioni
-  dell'utente: il backend scollega subito gli agenti e rifiuta richieste e nuovi collegamenti. L'interruttore
-  sta sul server: protegge da un uso indesiderato dell'account, non da un server compromesso, contro cui
-  vale il blocco dell'agente.
-- I tentativi di login sono limitati da nginx (10 al minuto, poi risposta 429). Dietro un proxy il limite
-  vale per tutti i client insieme.
-- Il login resta valido per `JWT_TTL` (30 giorni se non impostato). Disattivare un utente ha effetto subito;
-  il cambio password non chiude le sessioni già aperte sugli altri dispositivi.
-- La cronologia degli eventi non ha una scadenza: cresce finché le sessioni restano nel database.
-
-Per segnalare un problema di sicurezza scrivi a <info@sartoriadelcodice.it> invece di aprire una issue pubblica.
+Read [SECURITY.md](SECURITY.md) for the full threat model and to report a vulnerability privately.
 
 ## API
 
-| Metodo e percorso                    | Descrizione                                             | Autenticazione |
-| ------------------------------------ | ------------------------------------------------------- | -------------- |
-| `POST /api/events`                   | Riceve gli eventi degli hook                            | Chiave hook    |
-| `POST /api/auth/login`               | Login, restituisce il JWT                               | Nessuna        |
-| `GET /api/sessions`                  | Elenco sessioni (`status`, `machine`, `includeHistory`) | JWT            |
-| `GET /api/sessions/{id}/events`      | Cronologia eventi della sessione                        | JWT            |
-| `PATCH /api/sessions/{id}`           | Segna come vista o archivia (`seen`, `archived`)        | JWT            |
-| `GET /api/stream`                    | Aggiornamenti in tempo reale (SSE)                      | JWT            |
-| `POST /api/sessions/{id}/focus`      | Porta in primo piano la finestra della sessione         | JWT            |
-| `GET /api/focus/machines`            | Macchine con l'agente del focus collegato               | JWT            |
-| `GET` e `PUT /api/focus/settings`    | Interruttore del focus dell'utente (`enabled`)          | JWT            |
-| `GET /api/agent/stream`              | Richieste di focus per l'agente di una macchina (SSE, `machine`) | Chiave hook |
-| `GET /api/push/public-key`           | Chiave pubblica VAPID                                   | JWT            |
-| `POST` e `DELETE /api/push/subscriptions` | Registra o rimuove un dispositivo                  | JWT            |
-| `GET` e `POST /api/hook-keys`        | Elenca o crea le proprie chiavi hook                    | JWT            |
-| `DELETE /api/hook-keys/{id}`         | Revoca una propria chiave hook                          | JWT            |
-| `GET /api/me`, `POST /api/me/password` | Dati dell'utente collegato, cambio password           | JWT            |
-| `GET` e `POST /api/users`, `PATCH /api/users/{id}` | Gestione utenti                           | JWT (admin)    |
+| Method and path                                     | Description                                              | Auth        |
+| --------------------------------------------------- | -------------------------------------------------------- | ----------- |
+| `POST /api/events`                                  | Receives hook events                                     | Hook key    |
+| `POST /api/auth/login`                              | Sign in, returns the JWT                                 | —           |
+| `GET /api/sessions`                                 | Sessions (`status`, `machine`, `includeHistory`)         | JWT         |
+| `GET /api/sessions/{id}/events`                     | Event history of a session                               | JWT         |
+| `PATCH /api/sessions/{id}`                          | Mark as seen or archive (`seen`, `archived`)             | JWT         |
+| `GET /api/stream`                                   | Real-time updates (SSE)                                  | JWT         |
+| `POST /api/sessions/{id}/focus`                     | Brings the session window to the front                   | JWT         |
+| `GET /api/focus/agents`                             | Machines with the focus agent connected                  | JWT         |
+| `GET`, `PUT /api/focus/settings`                    | The user's focus switch (`enabled`)                      | JWT         |
+| `GET /api/agent/stream`                             | Focus requests for a machine's agent (SSE, `machine`)    | Hook key    |
+| `POST /api/agent/activity`                          | The agent's answer to an idle-time request               | Hook key    |
+| `GET /api/push/public-key`                          | VAPID public key                                         | JWT         |
+| `POST`, `DELETE /api/push/subscriptions`            | Registers or removes a device (with its `language`)      | JWT         |
+| `GET`, `POST /api/hook-keys`                        | Lists or creates your hook keys                          | JWT         |
+| `DELETE /api/hook-keys/{id}`                        | Revokes one of your hook keys                            | JWT         |
+| `GET /api/me`, `POST /api/me/password`              | Signed-in user, password change                          | JWT         |
+| `GET`, `POST /api/users`, `PATCH /api/users/{id}`   | User management                                          | JWT (admin) |
 
-## Sviluppo
+## Development
 
 ```bash
-cd backend && mvn test               # test del backend
-cd backend && mvn spring-boot:run    # richiede PostgreSQL su localhost:5432 e le variabili del file .env
+cd backend && mvn test                 # backend tests
+cd backend && mvn spring-boot:run      # needs PostgreSQL on localhost:5432 and the variables of .env
 
 cd frontend && npm ci
-npm start                            # http://localhost:4200, proxy di /api verso localhost:8080
-npm run build                        # build di produzione
+npm start                              # http://localhost:4200, proxies /api to localhost:8080
+npm run i18n:check                     # translations aligned and complete
+npm run build                          # production build
 ```
 
-Il frontend richiede Node 22.22.3, 24.15 oppure 26 e successivi. `npm start` e `npm run build` leggono
-`PRIMENG_LICENSE` dall'ambiente o dal file `.env` nella radice.
+The frontend needs Node 22.22.3, 24.15 or 26+. Architecture, conventions and the iPadOS constraints to respect are
+documented in [CLAUDE.md](CLAUDE.md); the contribution workflow is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Struttura del codice, convenzioni e vincoli da rispettare su iPadOS sono in [CLAUDE.md](CLAUDE.md).
+### Tech stack
 
-## Licenza
+Java 21 · Spring Boot 3.5 · Spring Security · PostgreSQL 17 · Flyway · Web Push (VAPID) · Angular 22 (standalone,
+signals, zoneless) · PrimeNG 22 · Transloco · Angular service worker · nginx · Docker Compose · Bash and PowerShell
+hooks.
 
-Il codice è distribuito con licenza [MIT](LICENSE).
-PrimeNG ha una licenza propria: ogni installazione usa la propria chiave PrimeUI.
+### Translations
+
+The interface is available in English and Italian. Translations live in
+[`frontend/src/i18n`](frontend/src/i18n) as flat JSON files; push notification texts are in
+[`backend/src/main/resources/messages*.properties`](backend/src/main/resources). Adding a language takes a few
+files — see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-language). New translations are very welcome.
+
+## FAQ
+
+<details>
+<summary><strong>Does Claude Monitor see my code or my prompts?</strong></summary>
+
+No. The hook sends event metadata (event name, session id, folder name, machine, model, notification type and
+message). Prompts, answers, tool input and output are removed on the machine before sending and again on the server.
+</details>
+
+<details>
+<summary><strong>Does it work with Claude Code on Windows and Linux?</strong></summary>
+
+Yes. The hook exists in Bash (macOS and Linux) and PowerShell (Windows). Only the optional window focus agent is
+macOS-specific.
+</details>
+
+<details>
+<summary><strong>Do I need an Anthropic API key?</strong></summary>
+
+No. Claude Monitor never calls any Anthropic service: it only receives the events of the Claude Code hooks you
+install.
+</details>
+
+<details>
+<summary><strong>Can several people share one installation?</strong></summary>
+
+Yes. Every user sees only their own sessions and gets only their own notifications. Administrators create users;
+there is no public sign-up.
+</details>
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). For security issues follow [SECURITY.md](SECURITY.md) instead of opening a
+public issue. Changes are listed in the [changelog](CHANGELOG.md).
+
+## License
+
+Released under the [MIT License](LICENSE). PrimeNG has its own license: every installation uses its own PrimeUI key.
+
+Claude and Claude Code are trademarks of Anthropic, PBC. Claude Monitor is an independent open-source project, not
+affiliated with or endorsed by Anthropic.
+
+---
+
+<div align="center">
+Made with care by <a href="https://sartoriadelcodice.it">Sartoria del Codice</a>
+</div>

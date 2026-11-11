@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-/** Test del controllo sull'endpoint delle subscription push. Solo indirizzi IP: nessuna richiesta DNS. */
+/** Tests for the push subscription endpoint check. IP addresses only: no DNS lookups. */
 class PushEndpointValidatorTest {
 
     @Test
@@ -27,7 +27,7 @@ class PushEndpointValidatorTest {
             "https://[fd00::1]/push",
             "https://user@8.8.8.8/push",
             "file:///etc/passwd",
-            "non-un-url"
+            "not-a-url"
     })
     void unsafeEndpointIsRejected(String endpoint) {
         assertThat(PushEndpointValidator.isAllowed(endpoint)).isFalse();

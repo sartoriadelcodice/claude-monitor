@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Dati e password dell'utente collegato. */
+/** Profile and password of the logged-in user. */
 @RestController
 @RequestMapping("/api/me")
 public class MeController {

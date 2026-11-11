@@ -9,7 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Sessione Claude Code; l'id è il session_id inviato dagli hook. */
+/** Claude Code session; the id is the session_id sent by the hooks. */
 @Entity
 @Table(name = "sessions")
 public class Session {
@@ -17,7 +17,7 @@ public class Session {
     @Id
     private String id;
 
-    /** Proprietario: l'utente della chiave hook che ha inviato gli eventi. */
+    /** Owner: the user of the hook key that sent the events. */
     @Column(name = "user_id")
     private Long userId;
 
@@ -52,7 +52,7 @@ public class Session {
     @Column(name = "seen_at")
     private Instant seenAt;
 
-    /** Identificativo del controllo remoto di Claude Code (session_...), null se non è attivo. */
+    /** Claude Code Remote Control identifier (session_...), null if it is not active. */
     @Column(name = "remote_session_id")
     private String remoteSessionId;
 
@@ -76,7 +76,7 @@ public class Session {
         this.createdAt = now;
     }
 
-    /** Cambia stato azzerando il flag "vista"; restituisce false se lo stato era già quello. */
+    /** Changes the status and clears the "seen" flag; returns false if the status was already that one. */
     public boolean changeStatus(SessionStatus newStatus, Instant now) {
         if (this.status == newStatus) {
             return false;

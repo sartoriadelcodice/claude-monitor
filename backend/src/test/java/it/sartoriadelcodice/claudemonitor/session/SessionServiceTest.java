@@ -28,7 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Test dell'applicazione degli eventi alle sessioni, con repository simulati. */
+/** Tests for applying events to sessions, with mocked repositories. */
 class SessionServiceTest {
 
     private static final Long USER_ID = 1L;
@@ -95,7 +95,7 @@ class SessionServiceTest {
 
     @Test
     void resumedWorkClearsOldNotification() {
-        service.handleEvent(USER_ID, event("Notification", "permission_prompt", "Permesso"));
+        service.handleEvent(USER_ID, event("Notification", "permission_prompt", "Permission"));
         SessionDto dto = service.handleEvent(USER_ID, event("PostToolUse", null, null));
 
         assertThat(dto.status()).isEqualTo(SessionStatus.WORKING);
@@ -182,13 +182,13 @@ class SessionServiceTest {
     void projectAndCwdStayThoseOfTheLaunchDirectory() {
         service.handleEvent(USER_ID, event("SessionStart", null, null));
 
-        // Claude ha fatto "cd" in una sottocartella: cwd e project dell'evento cambiano
+        // Claude ran "cd" into a subfolder: the event's cwd and project change
         SessionDto moved = service.handleEvent(USER_ID, new HookEvent("s1", "PostToolUse", "macbook", "frontend",
                 "/work/demo/frontend", null, null, null, null, null, false, false, null, "{}"));
         assertThat(moved.project()).isEqualTo("demo");
         assertThat(moved.cwd()).isEqualTo("/work/demo");
 
-        // Una ripresa da un'altra cartella invece aggiorna il progetto
+        // A resume from another folder, instead, updates the project
         SessionDto resumed = service.handleEvent(USER_ID, new HookEvent("s1", "SessionStart", "macbook", "other",
                 "/work/other", null, null, "resume", null, null, false, false, null, "{}"));
         assertThat(resumed.project()).isEqualTo("other");
@@ -201,7 +201,7 @@ class SessionServiceTest {
                 "/work/demo", null, null, null, null, null, false, false, "session_01ABC", "{}"));
         assertThat(enabled.remoteSessionId()).isEqualTo("session_01ABC");
 
-        // L'hook lo invia a ogni evento: se manca, il controllo remoto è stato spento
+        // The hook sends it with every event: if it is missing, Remote Control has been turned off
         SessionDto disabled = service.handleEvent(USER_ID, event("Stop", null, null));
         assertThat(disabled.remoteSessionId()).isNull();
     }

@@ -67,7 +67,7 @@
   }
 }
 
-// Suoni attivi ma audio ancora bloccato dal browser: un puntino avvisa che serve un tocco qualsiasi
+// Sounds on but audio still locked by the browser: a dot signals that any tap is needed
 .sound {
   position: relative;
   display: inline-flex;
@@ -140,18 +140,18 @@
   gap: 16px;
 }
 
-// Contenitore della card e della barra del focus, attaccata sotto come parte della stessa card.
-// La griglia allunga i contenitori di una riga alla stessa altezza: le barre restano allineate in fondo.
+// Container of the card and of the focus bar, attached below as part of the same card.
+// The grid stretches the containers of a row to the same height: the bars stay aligned at the bottom.
 .card-wrap {
   display: flex;
   flex-direction: column;
   border-radius: 14px;
-  // Su iPadOS la pressione prolungata selezionerebbe il testo o aprirebbe il menu contestuale
+  // On iPadOS a long press would select the text or open the context menu
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 
-  // L'alone pulsante sta sul contenitore, così avvolge anche la barra del focus
+  // The pulsing glow is on the container, so it also wraps the focus bar
   &.highlight {
     animation: pulse 1.6s ease-in-out infinite;
   }
@@ -175,8 +175,8 @@
   }
 }
 
-// Barra "Apri finestra": tutta la larghezza della card, sempre nella stessa posizione e con l'etichetta,
-// per trovarla a colpo d'occhio e toccarla senza mirare.
+// "Open window" bar: full card width, always in the same position and with its label,
+// so it can be found at a glance and tapped without aiming.
 .focus {
   display: flex;
   align-items: center;
@@ -202,7 +202,7 @@
     color: var(--cm-blue);
   }
 
-  // L'esito riporta il nome della macchina, che può essere lungo: una sola riga, tagliata
+  // The outcome shows the machine name, which can be long: a single line, truncated
   span {
     min-width: 0;
     overflow: hidden;
@@ -214,7 +214,7 @@
     background: color-mix(in srgb, var(--cm-blue) 26%, var(--cm-surface));
   }
 
-  // Sulla card che sta avvisando è l'azione principale: pulsante pieno nel colore dello stato
+  // On an alerting card this is the main action: a filled button in the state color
   .highlight > & {
     color: var(--cm-on-status);
     background: var(--status);
@@ -238,7 +238,7 @@
     }
   }
 
-  // Esito della richiesta, mostrato per qualche secondo
+  // Outcome of the request, shown for a few seconds
   &.ok,
   &.error {
     color: var(--cm-text);
@@ -262,7 +262,7 @@
     }
   }
 
-  // La striscia laterale resta quella dello stato, continua con la card
+  // The side stripe keeps the state color, continuous with the card
   &.ok,
   &.error {
     border-left-color: var(--status);
@@ -298,7 +298,7 @@
     opacity: 0.55;
   }
 
-  // Ingrandimento temporaneo: testi più grandi; dove c'è spazio per due colonne il contenitore raddoppia
+  // Temporary enlargement: larger text; where there is room for two columns the container doubles
   &.zoomed {
     padding: 22px;
     gap: 10px;

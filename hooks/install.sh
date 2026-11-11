@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Installazione dell'hook di Claude Monitor su macOS e Linux.
+# Installs the Claude Monitor hook on macOS and Linux.
 #
-# Questo file è un modello: la dashboard lo scarica, sostituisce i tre segnaposto qui sotto
-# (URL, chiave hook e contenuto di claude-monitor-hook.sh) e lo offre come download.
-# Cosa fa:
-#   1. copia lo script dell'hook in ~/.claude/hooks/
-#   2. salva una copia di ~/.claude/settings.json
-#   3. aggiunge a settings.json le variabili e gli hook, senza toccare il resto
-# Si può rieseguire: le voci di Claude Monitor già presenti vengono sostituite, non duplicate.
+# This file is a template: the dashboard downloads it, replaces the three placeholders below
+# (URL, hook key and content of claude-monitor-hook.sh) and offers it as a download.
+# What it does:
+#   1. copies the hook script to ~/.claude/hooks/
+#   2. saves a copy of ~/.claude/settings.json
+#   3. adds the variables and the hooks to settings.json, without touching anything else
+# It can be run again: the Claude Monitor entries already present are replaced, not duplicated.
 
 set -euo pipefail
 
@@ -19,12 +19,12 @@ hook_file="$claude_dir/hooks/claude-monitor-hook.sh"
 settings_file="$claude_dir/settings.json"
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Errore: serve python3 per modificare $settings_file." >&2
-  echo "Installalo e riesegui lo script, oppure segui l'installazione manuale in hooks/README.md." >&2
+  echo "Error: python3 is required to modify $settings_file." >&2
+  echo "Install it and run the script again, or follow the manual installation in hooks/README.md." >&2
   exit 1
 fi
 if ! command -v curl >/dev/null 2>&1; then
-  echo "Attenzione: curl non è installato. L'hook non potrà inviare eventi finché non lo installi." >&2
+  echo "Warning: curl is not installed. The hook cannot send events until you install it." >&2
 fi
 
 mkdir -p "$claude_dir/hooks"
@@ -32,7 +32,7 @@ cat >"$hook_file" <<'CLAUDE_MONITOR_HOOK_EOF'
 __CLAUDE_MONITOR_HOOK_SCRIPT__
 CLAUDE_MONITOR_HOOK_EOF
 chmod +x "$hook_file"
-echo "Hook installato in $hook_file"
+echo "Hook installed in $hook_file"
 
 MONITOR_URL="$MONITOR_URL" MONITOR_TOKEN="$MONITOR_TOKEN" python3 - "$settings_file" <<'CLAUDE_MONITOR_PY_EOF'
 import json
@@ -42,7 +42,7 @@ import sys
 import tempfile
 import time
 
-# Se settings.json è un collegamento simbolico si modifica il file vero, senza sostituire il collegamento
+# If settings.json is a symbolic link the real file is modified, without replacing the link
 path = os.path.realpath(sys.argv[1])
 command = "~/.claude/hooks/claude-monitor-hook.sh"
 marker = "claude-monitor-hook"
@@ -50,8 +50,8 @@ async_events = ["SessionStart", "UserPromptSubmit", "Notification", "PostToolUse
 
 
 def fail(message):
-    print("Errore: " + message, file=sys.stderr)
-    print("Il file non è stato modificato.", file=sys.stderr)
+    print("Error: " + message, file=sys.stderr)
+    print("The file has not been modified.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -64,14 +64,14 @@ if exists:
         try:
             settings = json.loads(raw)
         except ValueError as error:
-            fail("%s non è un JSON valido (%s)." % (path, error))
+            fail("%s is not valid JSON (%s)." % (path, error))
 if not isinstance(settings, dict):
-    fail("%s non contiene un oggetto JSON." % path)
+    fail("%s does not contain a JSON object." % path)
 
 env = settings.setdefault("env", {})
 hooks = settings.setdefault("hooks", {})
 if not isinstance(env, dict) or not isinstance(hooks, dict):
-    fail('le sezioni "env" e "hooks" di %s non hanno la forma attesa.' % path)
+    fail('the "env" and "hooks" sections of %s do not have the expected shape.' % path)
 
 env["CLAUDE_MONITOR_URL"] = os.environ["MONITOR_URL"]
 env["CLAUDE_MONITOR_TOKEN"] = os.environ["MONITOR_TOKEN"]
@@ -82,7 +82,7 @@ def is_ours(hook):
 
 
 def without_ours(groups):
-    """Toglie le voci di Claude Monitor già presenti e lascia intatti gli altri hook."""
+    """Removes the Claude Monitor entries already present and leaves the other hooks untouched."""
     kept = []
     for group in groups:
         if isinstance(group, dict) and isinstance(group.get("hooks"), list):
@@ -97,10 +97,10 @@ def without_ours(groups):
 for event in async_events + ["SessionEnd"]:
     groups = hooks.get(event, [])
     if not isinstance(groups, list):
-        fail('la sezione "hooks.%s" di %s non è un elenco.' % (event, path))
+        fail('the "hooks.%s" section of %s is not a list.' % (event, path))
     entry = {"type": "command", "command": command}
     if event == "SessionEnd":
-        # Alla chiusura un processo in background potrebbe non finire: sincrono, con timeout breve
+        # On exit a background process might not finish: synchronous, with a short timeout
         entry["timeout"] = 5
     else:
         entry["async"] = True
@@ -109,9 +109,9 @@ for event in async_events + ["SessionEnd"]:
 if exists:
     backup = "%s.backup-%s" % (path, time.strftime("%Y%m%d-%H%M%S"))
     shutil.copy2(path, backup)
-    print("Copia di sicurezza: " + backup)
+    print("Backup copy: " + backup)
 
-# Scrittura su file temporaneo e sostituzione: settings.json non resta mai a metà
+# Write to a temporary file, then replace: settings.json is never left half-written
 handle, temporary = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".settings-", suffix=".tmp")
 try:
     with os.fdopen(handle, "w", encoding="utf-8") as target:
@@ -124,9 +124,9 @@ except BaseException:
     if os.path.exists(temporary):
         os.unlink(temporary)
     raise
-print("Impostazioni aggiornate: " + path)
+print("Settings updated: " + path)
 CLAUDE_MONITOR_PY_EOF
 
 echo
-echo "Fatto. Apri una nuova sessione di Claude Code: comparirà nella dashboard ($MONITOR_URL)."
-echo "Questo script contiene la chiave hook: ora puoi eliminarlo."
+echo "Done. Open a new Claude Code session: it will appear in the dashboard ($MONITOR_URL)."
+echo "This script contains the hook key: you can delete it now."

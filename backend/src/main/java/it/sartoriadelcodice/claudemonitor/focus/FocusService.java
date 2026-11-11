@@ -15,17 +15,17 @@ import it.sartoriadelcodice.claudemonitor.user.UserRepository;
 import org.springframework.stereotype.Service;
 
 /**
- * Focus delle finestre: interruttore dell'utente, che vale per tutte le sue macchine, e scelta della macchina
- * su cui aprire una sessione.
+ * Window focus: the user's switch, which applies to all of their machines, and the choice of the machine
+ * on which to open a session.
  */
 @Service
 public class FocusService {
 
-    /** Attesa massima delle risposte degli agenti quando si cerca il Mac in uso. */
+    /** Maximum wait for the agents' replies when looking for the Mac in use. */
     static final Duration PROBE_TIMEOUT = Duration.ofMillis(1500);
     /**
-     * Se il Mac della sessione non risponde (agente di una versione precedente), un altro Mac vince solo
-     * se è stato usato entro questo tempo.
+     * If the session's Mac does not reply (agent from an earlier version), another Mac wins only
+     * if it was used within this time.
      */
     static final long ACTIVE_IDLE_SECONDS = 120;
 
@@ -37,12 +37,12 @@ public class FocusService {
         this.registry = registry;
     }
 
-    /** Falso anche se l'utente non esiste più: nel dubbio il focus resta spento. */
+    /** Also false if the user no longer exists: when in doubt, focus stays off. */
     public boolean isEnabled(Long userId) {
         return users.findById(userId).map(User::isFocusEnabled).orElse(false);
     }
 
-    /** Accende o spegne il focus. Allo spegnimento gli agenti collegati vengono avvisati e scollegati subito. */
+    /** Turns focus on or off. When it is turned off, connected agents are notified and disconnected at once. */
     public void setEnabled(Long userId, boolean enabled) {
         users.findById(userId).ifPresent(user -> {
             user.setFocusEnabled(enabled);
@@ -54,11 +54,11 @@ public class FocusService {
     }
 
     /**
-     * Apre la sessione sul Mac che l'utente sta usando. Senza controllo remoto è sempre la finestra sul Mac
-     * della sessione. Con il controllo remoto attivo concorrono anche i Mac con l'app Claude: vince quello
-     * usato per ultimo, dove la sessione si apre nell'app; a parità resta il Mac della sessione.
+     * Opens the session on the Mac the user is using. Without Remote Control it is always the window on the
+     * session's Mac. With Remote Control active, Macs with the Claude app compete too: the one used last wins,
+     * and the session opens in the app there; on a tie the session's Mac is kept.
      *
-     * @return dove è stata aperta; vuoto se nessun agente adatto è collegato
+     * @return where it was opened; empty if no suitable agent is connected
      */
     public Optional<FocusResult> focus(Long userId, SessionDto session) {
         String home = session.machine();
@@ -71,7 +71,7 @@ public class FocusService {
 
         String target = home;
         if (!viewers.isEmpty()) {
-            // Con una sola macchina possibile non serve chiedere chi la sta usando
+            // With only one possible machine there is no need to ask which one is in use
             target = homeConnected || viewers.size() > 1
                     ? lastUsed(userId, home, homeConnected, viewers)
                     : viewers.getFirst();
@@ -85,7 +85,7 @@ public class FocusService {
         return Optional.empty();
     }
 
-    /** Mac usato per ultimo, secondo i secondi di inattività riportati dagli agenti. */
+    /** Mac used last, according to the idle seconds reported by the agents. */
     private String lastUsed(Long userId, String home, boolean homeConnected, List<String> viewers) {
         List<String> machines = new ArrayList<>(viewers);
         if (homeConnected) {
@@ -96,7 +96,7 @@ public class FocusService {
                 .filter(idle::containsKey)
                 .min(Comparator.comparing(idle::get));
         if (viewer.isEmpty()) {
-            // Nessuna risposta dagli altri Mac: resta quello della sessione, se è collegato
+            // No reply from the other Macs: keep the session's Mac, if it is connected
             return homeConnected ? home : viewers.getFirst();
         }
         long viewerIdle = idle.get(viewer.get());
@@ -111,10 +111,10 @@ public class FocusService {
     }
 
     /**
-     * Esito del focus.
+     * Outcome of the focus.
      *
-     * @param machine   macchina su cui è stata aperta la sessione
-     * @param claudeApp vero se è stata aperta nell'app Claude (controllo remoto) e non nella sua finestra
+     * @param machine   machine on which the session was opened
+     * @param claudeApp true if it was opened in the Claude app (Remote Control) rather than in its own window
      */
     public record FocusResult(String machine, boolean claudeApp) {
     }

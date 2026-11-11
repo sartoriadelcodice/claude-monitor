@@ -6,20 +6,20 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * Logica pura di mappatura evento hook → stato della sessione.
- * Restituisce un Optional vuoto quando l'evento non deve cambiare lo stato.
+ * Pure mapping logic from hook event to session status.
+ * Returns an empty Optional when the event must not change the status.
  */
 @Component
 public class SessionStateMapper {
 
-    /** Tipi di Notification che richiedono davvero un intervento. */
+    /** Notification types that really require action. */
     private static final Set<String> ATTENTION_NOTIFICATIONS = Set.of("permission_prompt", "elicitation_dialog");
 
     /**
-     * @param eventName        valore di hook_event_name
-     * @param notificationType notification_type (solo per Notification, può mancare)
-     * @param source           source di SessionStart (startup, resume, clear, compact, fork)
-     * @param current          stato attuale, null se la sessione è nuova
+     * @param eventName        value of hook_event_name
+     * @param notificationType notification_type (Notification only, may be missing)
+     * @param source           source of SessionStart (startup, resume, clear, compact, fork)
+     * @param current          current status, null if the session is new
      */
     public Optional<SessionStatus> map(String eventName, String notificationType, String source,
                                        SessionStatus current) {
@@ -27,8 +27,8 @@ public class SessionStateMapper {
     }
 
     /**
-     * @param backgroundWork vero se allo Stop restano task in background o risvegli pianificati
-     * @param subagent       vero se l'evento arriva da un subagent (agent_id presente)
+     * @param backgroundWork true if background tasks or scheduled wake-ups remain at Stop
+     * @param subagent       true if the event comes from a subagent (agent_id present)
      */
     public Optional<SessionStatus> map(String eventName, String notificationType, String source,
                                        boolean backgroundWork, boolean subagent, SessionStatus current) {
@@ -39,7 +39,7 @@ public class SessionStateMapper {
             case "SessionStart" -> mapSessionStart(source, current);
             case "UserPromptSubmit" -> Optional.of(SessionStatus.WORKING);
             case "Notification" -> mapNotification(notificationType, current);
-            // Con del lavoro ancora in corso sotto, la sessione ripartirà da sola: non tocca all'utente
+            // With work still running underneath, the session will resume on its own: it is not the user's turn
             case "Stop" -> Optional.of(backgroundWork ? SessionStatus.BACKGROUND : SessionStatus.WAITING_INPUT);
             case "PostToolUse" -> mapPostToolUse(subagent, current);
             case "SessionEnd" -> Optional.of(SessionStatus.ENDED);
@@ -48,7 +48,7 @@ public class SessionStateMapper {
     }
 
     private Optional<SessionStatus> mapSessionStart(String source, SessionStatus current) {
-        // La compattazione avviene a metà lavoro: non deve riportare la sessione a IDLE
+        // Compaction happens mid-work: it must not bring the session back to IDLE
         if ("compact".equals(source) && current != null && current != SessionStatus.ENDED) {
             return Optional.empty();
         }
@@ -56,27 +56,27 @@ public class SessionStateMapper {
     }
 
     private Optional<SessionStatus> mapNotification(String type, SessionStatus current) {
-        // Versioni di Claude Code senza notification_type: si segue la regola base
+        // Claude Code versions without notification_type: follow the basic rule
         if (type == null || type.isBlank() || ATTENTION_NOTIFICATIONS.contains(type)) {
             return Optional.of(SessionStatus.NEEDS_ATTENTION);
         }
-        // idle_prompt: Claude aspetta input da un po'. Utile solo se lo Stop è andato perso
+        // idle_prompt: Claude has been waiting for input for a while. Useful only if the Stop was lost
         if ("idle_prompt".equals(type) && current == SessionStatus.WORKING) {
             return Optional.of(SessionStatus.WAITING_INPUT);
         }
-        // Gli altri tipi (auth_success, agent_completed, ...) restano solo nella cronologia
+        // The other types (auth_success, agent_completed, ...) only stay in the history
         return Optional.empty();
     }
 
     private Optional<SessionStatus> mapPostToolUse(boolean subagent, SessionStatus current) {
-        // Un tool appena eseguito indica che Claude è ripartito, ad esempio dopo un permesso concesso.
-        // Non si tocca WAITING_INPUT: gli hook sono asincroni e un PostToolUse può arrivare dopo lo Stop.
+        // A tool that has just run means Claude has resumed, for example after a permission was granted.
+        // WAITING_INPUT is left alone: hooks are asynchronous and a PostToolUse can arrive after the Stop.
         if (current == null || current == SessionStatus.NEEDS_ATTENTION
                 || current == SessionStatus.STALE || current == SessionStatus.IDLE) {
             return Optional.of(SessionStatus.WORKING);
         }
-        // Sessione in pausa con task in background: un tool della conversazione principale indica che
-        // Claude è stato risvegliato. I tool dei subagent in background invece non contano.
+        // Session paused with background tasks: a tool from the main conversation means Claude has been
+        // woken up. Tools run by background subagents do not count.
         if (current == SessionStatus.BACKGROUND && !subagent) {
             return Optional.of(SessionStatus.WORKING);
         }

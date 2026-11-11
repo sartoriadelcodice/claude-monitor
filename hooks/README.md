@@ -1,33 +1,33 @@
-# Hook di Claude Code per Claude Monitor
+# Claude Code hook for Claude Monitor
 
-Lo script invia al backend gli eventi di ogni sessione Claude Code della macchina.
-Va installato su ogni macchina da monitorare.
+The hook script sends the events of every Claude Code session on the machine to the backend.
+It must be installed on every machine you want to monitor.
 
-## Requisiti
+## Requirements
 
-- macOS o Linux: `bash` e `curl`. `jq` è consigliato; senza `jq` lo script funziona lo stesso
-  ma invia il payload completo, compresi prompt e input dei tool.
-- Windows: PowerShell 5.1 o successivo.
+- macOS or Linux: `bash` and `curl`. `jq` is recommended; without `jq` the script still works,
+  but it sends the full payload, including prompts and tool input.
+- Windows: PowerShell 5.1 or later.
 
-## Installazione automatica
+## Automatic installation
 
-Dalla dashboard, subito dopo aver creato una chiave hook, si scarica uno script che fa tutto da solo.
-La piattaforma è proposta in base al browser e si può cambiare.
+Right after you create a hook key, the dashboard offers a script that does everything on its own.
+The platform is suggested based on the browser and can be changed.
 
-- macOS e Linux: `bash claude-monitor-install.sh` (richiede `python3`).
+- macOS and Linux: `bash claude-monitor-install.sh` (requires `python3`).
 - Windows: `powershell -ExecutionPolicy Bypass -File .\claude-monitor-install.ps1`.
 
-Lo script copia l'hook in `~/.claude/hooks/`, salva una copia di `~/.claude/settings.json` come
-`settings.json.backup-data-ora` e poi aggiunge variabili e hook lasciando intatto il resto.
-Si può rieseguire: le voci di Claude Monitor già presenti vengono sostituite. Se `settings.json` non è
-un JSON valido lo script si ferma senza modificarlo. Contiene la chiave in chiaro: dopo l'uso va eliminato.
+The script copies the hook to `~/.claude/hooks/`, saves a copy of `~/.claude/settings.json` as
+`settings.json.backup-<date>-<time>` and then adds the variables and the hooks, leaving everything else untouched.
+It can be run again: the Claude Monitor entries already present are replaced. If `settings.json` is not
+valid JSON, the script stops without modifying it. The script contains the key in plain text: delete it after use.
 
-I modelli sono `install.sh` e `install.ps1` in questa cartella: la dashboard vi inserisce URL, chiave e
-script dell'hook. Non vanno eseguiti così come sono.
+The templates are `install.sh` and `install.ps1` in this folder: the dashboard fills in the URL, the key and the
+hook script. Do not run them as they are.
 
-## Installazione manuale su macOS e Linux
+## Manual installation on macOS and Linux
 
-1. Copia lo script e rendilo eseguibile:
+1. Copy the script and make it executable:
 
    ```bash
    mkdir -p ~/.claude/hooks
@@ -35,158 +35,174 @@ script dell'hook. Non vanno eseguiti così come sono.
    chmod +x ~/.claude/hooks/claude-monitor-hook.sh
    ```
 
-2. Apri `~/.claude/settings.json` e unisci il contenuto di `settings.example.json`:
-   la sezione `env` con URL e token, e la sezione `hooks`.
-   Il nome della sessione compare nella dashboard solo se ne hai dato uno con `--name` o `/rename`:
-   Claude Code non passa agli hook i nomi generati in automatico.
-   Se hai già altri hook sugli stessi eventi, aggiungi il blocco all'array esistente invece di sostituirlo.
+2. Open `~/.claude/settings.json` and merge in the content of `settings.example.json`:
+   the `env` section with URL and token, and the `hooks` section.
+   If you already have other hooks on the same events, add the block to the existing array instead of replacing it.
+   The session name appears in the dashboard only if you gave the session one with `--name` or `/rename`:
+   Claude Code does not pass automatically generated names to hooks.
 
-3. Imposta i valori:
-   - `CLAUDE_MONITOR_URL`: URL pubblico della dashboard, senza `/api` finale.
-   - `CLAUDE_MONITOR_TOKEN`: una chiave hook creata dalla dashboard (pulsante con la chiave, in alto).
-     La chiave si vede solo al momento della creazione. Conviene crearne una per macchina:
-     le sessioni compaiono all'utente che ha creato la chiave, e ogni chiave si revoca da sola.
-   - `CLAUDE_MONITOR_MACHINE` (facoltativa): nome da mostrare al posto dell'hostname.
+3. Set the values:
 
-4. Apri una nuova sessione Claude Code: la card compare nella dashboard.
+   | Variable                 | Value                                                                       |
+   | ------------------------ | --------------------------------------------------------------------------- |
+   | `CLAUDE_MONITOR_URL`     | Public URL of the dashboard, without a trailing `/api`.                     |
+   | `CLAUDE_MONITOR_TOKEN`   | A hook key created from the dashboard (the key button at the top).          |
+   | `CLAUDE_MONITOR_MACHINE` | Optional: name to show instead of the hostname.                             |
 
-## Installazione manuale su Windows
+   A hook key is shown only when it is created. It is best to create one per machine: sessions appear to the
+   user who created the key, and each key can be revoked on its own.
 
-1. Copia `claude-monitor-hook.ps1` in `%USERPROFILE%\.claude\hooks\`.
-2. In `%USERPROFILE%\.claude\settings.json` usa la stessa struttura di `settings.example.json`,
-   sostituendo ogni comando con:
+4. Open a new Claude Code session: its card appears in the dashboard.
+
+## Manual installation on Windows
+
+1. Copy `claude-monitor-hook.ps1` to `%USERPROFILE%\.claude\hooks\`.
+2. In `%USERPROFILE%\.claude\settings.json` use the same structure as `settings.example.json`,
+   replacing every command with:
 
    ```
    powershell -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.claude\hooks\claude-monitor-hook.ps1"
    ```
 
-## Aggiornamento
+## Updating
 
-La dashboard pubblica gli script aggiornati sotto `/hooks`. Per aggiornare una macchina già collegata basta
-riscaricare lo script; chiave e `settings.json` non cambiano. Il comando pronto, con l'indirizzo già compilato,
-è in fondo alla finestra «Chiavi hook» della dashboard. Su Linux e macOS:
+The dashboard publishes the updated scripts under `/hooks`. To update a machine that is already connected, just
+download the script again; the key and `settings.json` do not change. The ready-made command, with the address
+already filled in, is at the bottom of the "Hook keys" dialog in the dashboard. On Linux and macOS:
 
 ```bash
 curl -fsS -o ~/.claude/hooks/claude-monitor-hook.sh 'https://monitor.example.com/hooks/claude-monitor-hook.sh' \
   && chmod +x ~/.claude/hooks/claude-monitor-hook.sh
 ```
 
-## Focus delle finestre (macOS, facoltativo)
+## Window focus (macOS, optional)
 
-Con l'agente attivo, sulle card delle sessioni di quel Mac compare un pulsante che porta in primo piano la
-finestra di Claude Code. L'installazione dell'hook non lo avvia: va attivato a mano su ogni Mac. Il comando
-pronto è nella finestra «Chiavi hook» della dashboard:
+With the agent running, the cards of the sessions on that Mac show a button that brings the Claude Code window
+to the front. Installing the hook does not start the agent: it must be enabled by hand on each Mac. The
+ready-made command is in the "Hook keys" dialog of the dashboard:
 
 ```bash
 curl -fsS -o ~/.claude/hooks/claude-monitor-agent.sh 'https://monitor.example.com/hooks/claude-monitor-agent.sh' \
   && bash ~/.claude/hooks/claude-monitor-agent.sh install
 ```
 
-Come funziona:
+### How it works
 
-- Su macOS l'hook annota in `~/.claude/claude-monitor/windows/<session_id>` l'applicazione che ospita la
-  sessione, il suo terminale e la cartella del progetto. Il file resta sulla macchina e non viene inviato;
-  si scrive a `SessionStart` (o al primo evento se manca) e si elimina a `SessionEnd`.
-- `claude-monitor-agent.sh install` registra un LaunchAgent (`it.sartoriadelcodice.claude-monitor-agent`)
-  che resta collegato a `GET /api/agent/stream` con la chiave hook. URL, chiave e nome della macchina li
-  legge dalla sezione `env` di `~/.claude/settings.json`: nel file di launchd non ci sono segreti.
-- Dal backend arriva solo l'identificativo della sessione. L'agente lo controlla, legge il file locale e:
-  - Terminale e iTerm: seleziona la scheda con quel terminale e porta avanti la finestra (AppleScript);
-  - VS Code, VSCodium e Cursor: apre la cartella del progetto, che porta avanti la finestra che l'ha già aperta
-    (se nessuna finestra ha quella cartella, ne apre una nuova);
-  - altre applicazioni, o scheda non trovata (ad esempio dentro tmux): porta avanti l'applicazione.
-- L'agente non esegue comandi ricevuti dalla rete e non invia tasti. Al primo utilizzo macOS chiede di
-  consentire il controllo di Terminale: va accettato.
-- Registro: `~/Library/Logs/claude-monitor-agent.log`. Prova locale, senza passare dal backend:
-  `bash ~/.claude/hooks/claude-monitor-agent.sh focus <session_id>`.
-- Rimozione: `bash ~/.claude/hooks/claude-monitor-agent.sh uninstall`.
+- On macOS the hook records in `~/.claude/claude-monitor/windows/<session_id>` the application hosting the
+  session, its terminal and the project folder. The file stays on the machine and is never sent;
+  it is written on `SessionStart` (or on the first event, if missing) and deleted on `SessionEnd`.
+- `claude-monitor-agent.sh install` registers a LaunchAgent (`it.sartoriadelcodice.claude-monitor-agent`)
+  that stays connected to `GET /api/agent/stream` with the hook key. It reads URL, key and machine name from
+  the `env` section of `~/.claude/settings.json`: the launchd file contains no secrets.
+- The backend only sends the session id. The agent checks it, reads the local file and:
+  - Terminal and iTerm: selects the tab with that terminal and brings the window to the front (AppleScript);
+  - VS Code, VSCodium and Cursor: opens the project folder, which brings forward the window that already has it
+    open (if no window has that folder, a new one opens);
+  - other applications, or tab not found (for example inside tmux): brings the application to the front.
+- The agent does not execute commands received from the network and does not send keystrokes. On first use
+  macOS asks to allow control of Terminal: accept it.
 
-### Sessioni in controllo remoto
+### Agent commands
 
-Con il controllo remoto di Claude Code attivo (`/remote-control`, o `remoteControlAtStartup` nelle impostazioni)
-una sessione che gira su un Mac si può seguire dall'app Claude di un altro. «Apri finestra» la apre sul Mac
-che stai usando:
+All commands are run as `bash ~/.claude/hooks/claude-monitor-agent.sh <command>`.
 
-- L'hook legge l'identificativo del controllo remoto (`bridgeSessionId`, come `session_...`) dal file del
-  processo in `~/.claude/sessions/<pid>.json` e lo invia a ogni evento come `remote_session_id`. Se il
-  controllo remoto viene spento il campo manca e la dashboard lo dimentica. Vale anche su Linux e Windows.
-- Al collegamento l'agente dichiara se sul Mac c'è l'app Claude (`com.anthropic.claudefordesktop` in
-  `/Applications` o `~/Applications`).
-- Al tocco su «Apri finestra» il backend chiede agli agenti coinvolti (il Mac della sessione e quelli con l'app
-  Claude) da quanti secondi non si usano tastiera e mouse, aspetta le risposte per un secondo e mezzo e sceglie
-  il Mac usato per ultimo. Se è quello della sessione porta avanti la finestra come sempre; altrimenti l'agente
-  di quel Mac apre la sessione nell'app Claude con `claude://code/<identificativo>`. A parità vince il Mac
-  della sessione. Il pulsante dice dove l'ha aperta.
-- Se la macchina della sessione non ha l'agente (ad esempio Linux o Windows) il pulsante si chiama
-  «Apri in Claude» e la sessione si apre nell'app Claude di un Mac con l'agente.
-- L'agente comunica il tempo di inattività solo quando il backend lo chiede, cioè a ogni tocco su
-  «Apri finestra», e non manda altro. Prove locali: `bash ~/.claude/hooks/claude-monitor-agent.sh idle` e
+| Command                | Effect                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `install`              | Registers the agent in launchd (starts now and at every login). Also updates it. |
+| `uninstall`            | Stops and removes the agent.                                                     |
+| `status`               | Tells whether the agent is registered and whether it is locked.                  |
+| `unlock`               | Removes the lock triggered by anomalous requests.                                |
+| `focus <session_id>`   | Local test, without the backend: brings the window of a session to the front.    |
+| `remote <session_...>` | Local test: opens a Remote Control session in the Claude app.                    |
+| `idle`                 | Local test: seconds since keyboard and mouse were last used.                     |
+
+Log: `~/Library/Logs/claude-monitor-agent.log`.
+
+### Remote Control sessions
+
+With Claude Code Remote Control enabled (`/remote-control`, or `remoteControlAtStartup` in the settings), a
+session running on one Mac can be followed from the Claude app on another. "Open window" opens it on the Mac
+you are using:
+
+- The hook reads the Remote Control id (`bridgeSessionId`, such as `session_...`) from the process file in
+  `~/.claude/sessions/<pid>.json` and sends it with every event as `remote_session_id`. If Remote Control is
+  turned off, the field is missing and the dashboard forgets it. This also works on Linux and Windows.
+- When it connects, the agent declares whether the Claude app is on the Mac (`com.anthropic.claudefordesktop` in
+  `/Applications` or `~/Applications`).
+- When "Open window" is tapped, the backend asks the agents involved (the session's Mac and those with the
+  Claude app) how many seconds keyboard and mouse have been idle, waits a second and a half for the answers and
+  picks the Mac used most recently. If it is the session's Mac, the window is brought to the front as usual;
+  otherwise the agent of that Mac opens the session in the Claude app with `claude://code/<id>`. On a tie the
+  session's Mac wins. The button says where the session was opened.
+- If the session's machine has no agent (for example Linux or Windows), the button is called
+  "Open in Claude" and the session opens in the Claude app of a Mac with the agent.
+- The agent reports its idle time only when the backend asks for it, that is on every tap on
+  "Open window", and sends nothing else. Local tests: `bash ~/.claude/hooks/claude-monitor-agent.sh idle` and
   `bash ~/.claude/hooks/claude-monitor-agent.sh remote <session_...>`.
-- Dopo l'aggiornamento va reinstallato l'agente su ogni Mac (stesso comando dell'installazione): un agente
-  di una versione precedente non risponde alle richieste e non apre l'app Claude.
+- After updating, reinstall the agent on every Mac (same command as for the installation): an agent from a
+  previous version does not answer the requests and does not open the Claude app.
 
-### Protezioni
+Sessions that are already open become reachable from the first event after the hook is updated.
+Linux and Windows have no agent: their sessions open only in the Claude app of a Mac, and only if they have
+Remote Control enabled.
 
-- **Solo https**: l'agente non si collega a un indirizzo `http`, tranne verso la macchina stessa.
-- **Richieste anomale**: ognuna vale dei punti, sommati su dieci minuti. Un identificativo malformato
-  (di sessione, di controllo remoto o di richiesta di inattività) vale 10 punti; una sessione che il Mac non
-  conosce, una sessione remota su un Mac senza l'app Claude, un focus a meno di due secondi dal precedente o
-  una richiesta di inattività nello stesso secondo della precedente valgono 1 punto. A 10 punti, oltre 60
-  focus eseguiti in un'ora o oltre 120 richieste di inattività in un'ora, l'agente si blocca.
-- **Link composti in locale**: per il controllo remoto dal backend arriva solo l'identificativo
-  (`session_` o `cse_` seguito da lettere, cifre, `_` e `-`); il link `claude://code/...` lo compone l'agente
-  e lo apre solo con l'app Claude.
-- **Blocco**: l'agente chiude il collegamento, mostra una notifica, scrive il motivo in
-  `~/.claude/claude-monitor/agent.locked` e non si ricollega. Dalla dashboard il pulsante del focus sparisce.
-  Il blocco non si toglie dalla rete: dopo aver letto il registro si lancia sul Mac
-  `bash ~/.claude/hooks/claude-monitor-agent.sh unlock`. Lo stato si vede con `status`.
-- **Interruttore nella dashboard**: in Impostazioni, «Focus delle finestre» spegne la funzione per tutte le
-  macchine e le sessioni dell'utente. Il backend scollega gli agenti e ne rifiuta i nuovi collegamenti;
-  l'agente riprova ogni minuto e riparte da solo quando l'interruttore torna acceso.
+### Protections
 
-Le soglie sono in testa allo script (`suspect_limit`, `suspect_window`, `hourly_limit`,
+- **https only**: the agent does not connect to an `http` address, except towards the machine itself.
+- **Anomalous requests**: each one is worth some points, added up over ten minutes. A malformed id
+  (of a session, of Remote Control or of an idle-time request) is worth 10 points; a session the Mac does not
+  know, a remote session on a Mac without the Claude app, a focus less than two seconds after the previous one
+  or an idle-time request in the same second as the previous one are worth 1 point. At 10 points, beyond 60
+  focus actions executed in an hour or beyond 120 idle-time requests in an hour, the agent locks itself.
+- **Links built locally**: for Remote Control the backend only sends the id (`session_` or `cse_` followed by
+  letters, digits, `_` and `-`); the agent builds the `claude://code/...` link itself and opens it only with
+  the Claude app.
+- **Lock**: the agent closes the connection, shows a notification, writes the reason to
+  `~/.claude/claude-monitor/agent.locked` and does not reconnect. In the dashboard the focus button disappears.
+  The lock cannot be removed from the network: after reading the log, run
+  `bash ~/.claude/hooks/claude-monitor-agent.sh unlock` on the Mac. `status` shows the current state.
+- **Switch in the dashboard**: in Settings, "Window focus" turns the feature off for all the user's machines
+  and sessions. The backend disconnects the agents and refuses their new connections; the agent retries every
+  minute and starts again on its own when the switch is turned back on.
+
+The thresholds are at the top of the script (`suspect_limit`, `suspect_window`, `hourly_limit`,
 `probe_hourly_limit`, `min_interval`).
 
-Le sessioni già aperte diventano raggiungibili dal primo evento successivo all'aggiornamento dell'hook.
-Su Linux e Windows l'agente non c'è: le loro sessioni si aprono solo nell'app Claude di un Mac, se hanno il
-controllo remoto attivo.
-
-## Prova manuale
+## Manual test
 
 ```bash
 export CLAUDE_MONITOR_URL=http://localhost:8088
-export CLAUDE_MONITOR_TOKEN=cmk_la-tua-chiave-hook
-echo '{"session_id":"prova-1","hook_event_name":"Notification","cwd":"/tmp/prova","notification_type":"permission_prompt","message":"Claude needs your permission"}' \
+export CLAUDE_MONITOR_TOKEN=cmk_your-hook-key
+echo '{"session_id":"test-1","hook_event_name":"Notification","cwd":"/tmp/test","notification_type":"permission_prompt","message":"Claude needs your permission"}' \
   | hooks/claude-monitor-hook.sh
 ```
 
-## Eventi e stati
+## Events and states
 
-| Evento             | Stato risultante                                                        |
-| ------------------ | ----------------------------------------------------------------------- |
-| `SessionStart`     | `IDLE` (non cambia se `source` è `compact`)                             |
-| `UserPromptSubmit` | `WORKING`                                                               |
-| `Notification`     | `NEEDS_ATTENTION` per `permission_prompt` ed `elicitation_dialog`; `WAITING_INPUT` per `idle_prompt` se la sessione era `WORKING`; gli altri tipi restano solo in cronologia |
-| `PostToolUse`      | `WORKING` se la sessione era `NEEDS_ATTENTION`, `IDLE` o `STALE`, oppure `BACKGROUND` e il tool non è di un subagent |
-| `Stop`             | `BACKGROUND` se `background_tasks` o `session_crons` non sono vuoti, altrimenti `WAITING_INPUT` |
-| `PostModelSwitch`  | Nessun cambio di stato: aggiorna il modello mostrato sulla card         |
-| `SessionEnd`       | `ENDED`, e la sessione viene archiviata                                 |
+| Event              | Resulting state                                                          |
+| ------------------ | ------------------------------------------------------------------------ |
+| `SessionStart`     | `IDLE` (unchanged if `source` is `compact`)                              |
+| `UserPromptSubmit` | `WORKING`                                                                |
+| `Notification`     | `NEEDS_ATTENTION` for `permission_prompt` and `elicitation_dialog`; `WAITING_INPUT` for `idle_prompt` if the session was `WORKING`; other types are only kept in the history |
+| `PostToolUse`      | `WORKING` if the session was `NEEDS_ATTENTION`, `IDLE` or `STALE`, or `BACKGROUND` and the tool does not belong to a subagent |
+| `Stop`             | `BACKGROUND` if `background_tasks` or `session_crons` are not empty, otherwise `WAITING_INPUT` |
+| `PostModelSwitch`  | No state change: updates the model shown on the card                     |
+| `SessionEnd`       | `ENDED`, and the session is archived                                     |
 
-## Comportamento
+## Behaviour
 
-- Dati inviati: identificativo e nome della sessione, cartella, macchina, tipo di evento, testo delle
-  notifiche di Claude Code, modello, identificativo del controllo remoto se attivo. Con `jq` installato (e sempre su Windows) lo script toglie prima
-  dell'invio prompt, risposte di Claude, input e output dei tool, comandi dei task in background e prompt
-  dei risvegli pianificati. Senza `jq` il payload parte intero ed è il backend a scartare quei campi prima
-  di salvarlo: per questo `jq` è consigliato.
-
-- Il modello arriva con `SessionStart` solo in alcuni casi (mai dopo `/clear`). Quando manca, su `Stop` e
-  `PostToolUse` lo script lo legge dall'ultima risposta nel transcript e lo aggiunge al payload come `model`.
-
-- Gli hook sono dichiarati `async`: girano in background e non rallentano Claude Code.
-  `SessionEnd` è sincrono con timeout di 5 secondi, perché alla chiusura un processo in background potrebbe non finire.
-- Lo script ha un timeout di rete di 3 secondi ed esce sempre con codice 0:
-  se il backend non risponde, Claude Code non mostra errori.
-- Senza `CLAUDE_MONITOR_URL` o `CLAUDE_MONITOR_TOKEN` lo script non fa nulla.
-- Con una chiave revocata o sconosciuta il backend risponde 401 e lo script lo ignora:
-  la macchina smette semplicemente di comparire nella dashboard.
+- Data sent: session id and name, folder, machine, event type, text of the Claude Code notifications, model,
+  and the Remote Control id if enabled. With `jq` installed (and always on Windows) the script removes, before
+  sending, prompts, Claude's responses, tool input and output, background task commands and the prompts of
+  scheduled wake-ups. Without `jq` the full payload is sent and the backend discards those fields before
+  storing it: this is why `jq` is recommended.
+- The model comes with `SessionStart` only in some cases (never after `/clear`). When it is missing, on `Stop`
+  and `PostToolUse` the script reads it from the last response in the transcript and adds it to the payload as
+  `model`.
+- The hooks are declared `async`: they run in the background and do not slow Claude Code down.
+  `SessionEnd` is synchronous with a 5-second timeout, because on exit a background process might not finish.
+- The script has a 3-second network timeout and always exits with code 0:
+  if the backend does not respond, Claude Code shows no errors.
+- Without `CLAUDE_MONITOR_URL` or `CLAUDE_MONITOR_TOKEN` the script does nothing.
+- With a revoked or unknown key the backend responds with 401 and the script ignores it:
+  the machine simply stops appearing in the dashboard.

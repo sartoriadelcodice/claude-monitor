@@ -16,7 +16,7 @@ public interface PushSubscriptionRepository extends JpaRepository<PushSubscripti
 
     long deleteByEndpointAndUserId(String endpoint, Long userId);
 
-    /** Assegna a un utente le subscription create prima della gestione multiutente. */
+    /** Assigns to a user the subscriptions created before multi-user support. */
     @Modifying
     @Query("update PushSubscription p set p.userId = :userId where p.userId is null")
     int assignOrphansTo(@Param("userId") Long userId);

@@ -1,187 +1,217 @@
 # Claude Monitor
 
-Dashboard che mostra lo stato di tutte le sessioni Claude Code attive su più macchine ed evidenzia
-quelle che richiedono attenzione. Usata soprattutto come PWA su iPad, con avviso sonoro e notifiche push.
+Dashboard that shows the state of every active Claude Code session across several machines and highlights the
+ones that need attention. Used mostly as a PWA on iPad, with sound alerts and push notifications.
 
-## Architettura
+## Architecture
 
-1. **Hook di Claude Code** (`hooks/`): su ogni macchina uno script invia gli eventi al backend.
-2. **Backend** (`backend/`): Java 21, Spring Boot 3.5, PostgreSQL, Flyway. Espone REST, SSE e Web Push.
-3. **Frontend** (`frontend/`): Angular 22, PrimeNG 22, PWA con service worker di Angular.
-4. **Deploy** (`docker-compose.yml`): postgres, backend, frontend servito da nginx. Il frontend è l'unico
-   punto di ingresso e fa da proxy verso `/api`. Profilo `tunnel` con cloudflared per i test locali:
-   il tunnel è gestito dalla dashboard Cloudflare e riceve solo `CLAUDE_MONITOR_TUNNEL_TOKEN`.
+1. **Claude Code hooks** (`hooks/`): on every machine a script sends the events to the backend.
+2. **Backend** (`backend/`): Java 21, Spring Boot 3.5, PostgreSQL, Flyway. Exposes REST, SSE and Web Push.
+3. **Frontend** (`frontend/`): Angular 22, PrimeNG 22, PWA with the Angular service worker, Transloco for i18n.
+4. **Deployment** (`docker-compose.yml`): postgres, backend, frontend served by nginx. The frontend is the only
+   entry point and proxies `/api`. The `tunnel` profile adds cloudflared for local testing: the tunnel is managed
+   from the Cloudflare dashboard and only receives `CLAUDE_MONITOR_TUNNEL_TOKEN`.
 
-## Comandi
+## Commands
 
 ### Backend
 
 ```bash
 cd backend
-mvn test                     # tutti i test
+mvn test                     # all tests
 mvn test -Dtest=SessionStateMapperTest
-mvn spring-boot:run          # richiede PostgreSQL su localhost:5432 e le variabili del file .env
+mvn spring-boot:run          # needs PostgreSQL on localhost:5432 and the variables of the .env file
 ```
 
 ### Frontend
 
-Angular 22 richiede Node 22.22.3, 24.15 o 26 e successivi. Sul Mac di sviluppo il Node predefinito è più
-vecchio: anteporre `PATH=/opt/homebrew/opt/node@26/bin:$PATH` ai comandi `npm` e `npx`.
+Angular 22 needs Node 22.22.3, 24.15 or 26 and later. On the development Mac the default Node is older:
+prefix `npm` and `npx` commands with `PATH=/opt/homebrew/opt/node@26/bin:$PATH`.
 
 ```bash
 cd frontend
 npm ci
-npm start                    # http://localhost:4200, proxy di /api verso localhost:8080
-npm run build                # build di produzione in dist/frontend/browser, con identificativo di build
+npm start                    # http://localhost:4200, proxies /api to localhost:8080
+npm run build                # production build in dist/frontend/browser, with build identifier
+npm run i18n:check           # translations aligned with en.json and every key used in the code defined
 ```
 
-Il service worker è attivo solo nella build di produzione: PWA, push e cache dei suoni non si provano con `ng serve`.
+The service worker is active only in the production build: PWA, push and sound caching can't be tested with
+`ng serve`.
 
-### Stack completo
+### Full stack
 
 ```bash
-cp .env.example .env         # poi imposta i valori
-docker compose up -d --build                    # dashboard su http://localhost:8088
-docker compose --profile tunnel up -d           # aggiunge il tunnel Cloudflare (protocollo http2)
+cp .env.example .env         # then set the values
+docker compose up -d --build                    # dashboard on http://localhost:8088
+docker compose --profile tunnel up -d           # adds the Cloudflare tunnel (http2 protocol)
+scripts/demo-events.sh http://localhost:8088 <hook key> seed   # fake sessions, for trying the UI
 ```
 
-## Modello di stato
+## State model
 
-La mappatura evento → stato sta tutta in `SessionStateMapper` (logica pura, coperta da test).
-Stati: `IDLE`, `WORKING`, `NEEDS_ATTENTION`, `WAITING_INPUT`, `BACKGROUND`, `ENDED`, `STALE`.
+The event → state mapping lives entirely in `SessionStateMapper` (pure logic, covered by tests).
+States: `IDLE`, `WORKING`, `NEEDS_ATTENTION`, `WAITING_INPUT`, `BACKGROUND`, `ENDED`, `STALE`.
 
-- `Notification` porta a `NEEDS_ATTENTION` solo per `permission_prompt` ed `elicitation_dialog`.
-- `PostToolUse` riporta a `WORKING` una sessione `NEEDS_ATTENTION`, `IDLE` o `STALE`; non tocca `WAITING_INPUT`
-  perché gli hook sono asincroni e possono arrivare fuori ordine.
-- `Stop` porta a `BACKGROUND` invece che a `WAITING_INPUT` se nel payload `background_tasks` o `session_crons`
-  non sono vuoti: la sessione ripartirà da sola, quindi niente suono né push. Lo `Stop` successivo, senza
-  lavoro in corso, la porta a `WAITING_INPUT`.
-- `PostToolUse` riporta a `WORKING` anche una sessione `BACKGROUND`, ma solo se non arriva da un subagent
-  (`agent_id` assente): i tool dei subagent in background non indicano un risveglio.
-- `STALE` è assegnato da `StaleSessionJob` dopo `STALE_AFTER` senza eventi.
-- Le sessioni `ENDED` vengono archiviate subito: escono dalla vista principale e restano nello storico.
-  Un nuovo evento che cambia lo stato (ad esempio una ripresa) le riporta in vista.
-- Nome del progetto e cartella della sessione si fissano alla creazione e a ogni `SessionStart` con `source`
-  `startup` o `resume`: negli altri eventi `cwd` segue i `cd` di Claude e non va usato per rinominare la card.
-- `PostModelSwitch` non cambia lo stato: aggiorna solo il modello mostrato sulla card.
-- Il modello della card arriva da `SessionStart` (non sempre presente), da `PostModelSwitch` e, quando manca,
-  dal transcript: lo script hook lo aggiunge come `model` su `Stop` e `PostToolUse`.
+- `Notification` leads to `NEEDS_ATTENTION` only for `permission_prompt` and `elicitation_dialog`.
+- `PostToolUse` brings a `NEEDS_ATTENTION`, `IDLE` or `STALE` session back to `WORKING`; it doesn't touch
+  `WAITING_INPUT` because hooks are asynchronous and can arrive out of order.
+- `Stop` leads to `BACKGROUND` instead of `WAITING_INPUT` when `background_tasks` or `session_crons` in the payload
+  are not empty: the session will resume on its own, so no sound and no push. The next `Stop` without work in
+  progress leads to `WAITING_INPUT`.
+- `PostToolUse` also brings a `BACKGROUND` session back to `WORKING`, but only when it does not come from a subagent
+  (`agent_id` missing): tools of background subagents don't mean the session woke up.
+- `STALE` is set by `StaleSessionJob` after `STALE_AFTER` without events.
+- `ENDED` sessions are archived right away: they leave the main view and stay in the history.
+  A new event that changes the state (a resume, for example) brings them back into view.
+- Project name and session folder are fixed at creation and at every `SessionStart` with `source` `startup` or
+  `resume`: in other events `cwd` follows Claude's `cd` and must not be used to rename the card.
+- `PostModelSwitch` doesn't change the state: it only updates the model shown on the card.
+- The card model comes from `SessionStart` (not always present), from `PostModelSwitch` and, when missing,
+  from the transcript: the hook script adds it as `model` to `Stop` and `PostToolUse`.
 
-## Struttura del backend
+## Backend structure
 
-Package base `it.sartoriadelcodice.claudemonitor`, organizzato per funzionalità:
+Base package `it.sartoriadelcodice.claudemonitor`, organized by feature:
 `config`, `auth`, `user`, `hookkey`, `event`, `session`, `stream`, `push`, `focus`.
 
-- Le modifiche alle sessioni pubblicano un `SessionChangedEvent`; `SessionChangeListener` lo inoltra
-  dopo il commit a SSE (`SessionBroadcaster`) e Web Push (`PushNotifier`).
-- Autenticazione sempre con header `Authorization: Bearer`: chiave hook personale per `POST /api/events`
-  e per `/api/agent/**` (ruolo `HOOK`), JWT per tutto il resto (ruoli `USER` e `ADMIN`). `AuthFilter` rilegge l'utente dal
-  database a ogni richiesta, così disattivazione e cambio ruolo hanno effetto subito.
-- Il payload degli hook si salva senza i contenuti della conversazione (`HookEvent.withoutPrivateContent`);
-  un campo nuovo con testo di prompt, risposte o comandi va aggiunto lì e negli script di `hooks/`.
-- L'endpoint di una subscription push è un indirizzo a cui il backend invia richieste: passa sempre da
-  `PushEndpointValidator` (solo https verso indirizzi pubblici).
-- Le chiavi hook (`hookkey`) sono casuali con prefisso `cmk_`; nel database c'è solo l'hash SHA-256.
-- Focus delle finestre (package `focus`): la dashboard chiama `POST /api/sessions/{id}/focus` e
-  `FocusAgentRegistry` inoltra l'identificativo della sessione all'agente della macchina, collegato a
-  `GET /api/agent/stream` con la chiave hook. Verso l'agente deve viaggiare solo l'identificativo: applicazione,
-  terminale e cartella restano nel file locale scritto dall'hook. L'agente (`hooks/claude-monitor-agent.sh`,
-  solo macOS, attivato a mano) non deve mai eseguire comandi ricevuti dalla rete né inviare tasti.
-- Controllo remoto (Remote Control di Claude Code): l'hook invia a ogni evento `remote_session_id`, il
-  `bridgeSessionId` letto da `~/.claude/sessions/<pid>.json`; se manca, il controllo remoto è spento.
-  Per queste sessioni `FocusService` sceglie il Mac usato per ultimo: chiede agli agenti i secondi di inattività
-  (evento `probe`, risposta su `POST /api/agent/activity`) e porta avanti la finestra sul Mac della sessione,
-  oppure manda l'evento `remote` a un Mac con l'app Claude, il cui agente apre `claude://code/<id>`.
-  Anche qui viaggia solo l'identificativo, accettato solo nella forma `session_`/`cse_` sia da `HookEvent` sia
-  dall'agente, che compone il link da sé. L'inattività si comunica solo su richiesta, mai di continuo.
-- Protezioni del focus, da non allentare: l'agente conta le richieste anomale (e a parte le richieste di
-  inattività, con un proprio limite orario) e si blocca da solo
-  (`agent.locked`, si toglie solo sul Mac con `unlock`, mai dalla rete); l'interruttore dell'utente
-  (`users.focus_enabled`, `FocusService`) scollega gli agenti e fa rispondere 403 a richieste e stream.
-- Multiutente: sessioni, cronologia, stream SSE e subscription push appartengono a un utente.
-  Ogni nuova query o endpoint su questi dati deve filtrare per `userId` preso da `AuthUser`.
-- `AdminBootstrap` crea l'amministratore iniziale da `ADMIN_USERNAME` e `ADMIN_PASSWORD` solo se non
-  esistono utenti, e gli assegna i dati senza proprietario e l'eventuale `HOOK_TOKEN`.
-- Lo schema del database cambia solo con nuove migrazioni Flyway in `src/main/resources/db/migration`;
-  Hibernate è in modalità `validate`.
+- Session changes publish a `SessionChangedEvent`; `SessionChangeListener` forwards it after commit to SSE
+  (`SessionBroadcaster`) and Web Push (`PushNotifier`).
+- Authentication always with the `Authorization: Bearer` header: personal hook key for `POST /api/events`
+  and for `/api/agent/**` (role `HOOK`), JWT for everything else (roles `USER` and `ADMIN`). `AuthFilter` reloads
+  the user from the database on every request, so disabling a user and changing a role take effect immediately.
+- The hook payload is stored without the conversation content (`HookEvent.withoutPrivateContent`); a new field
+  carrying prompt text, answers or commands must be added there and in the scripts in `hooks/`.
+- The endpoint of a push subscription is an address the backend sends requests to: it always goes through
+  `PushEndpointValidator` (https to public addresses only).
+- Push notifications are written in the language of each device: the dashboard sends `language` with the
+  subscription and again when the interface language changes. Texts are in `messages*.properties`
+  (English default, `fallback-to-system-locale: false`); `PushNotifier.LANGUAGES` lists the supported ones.
+- Hook keys (`hookkey`) are random with the `cmk_` prefix; the database stores only their SHA-256 hash.
+- Window focus (`focus` package): the dashboard calls `POST /api/sessions/{id}/focus` and `FocusAgentRegistry`
+  forwards the session identifier to the agent of the machine, connected to `GET /api/agent/stream` with the hook
+  key. Only the identifier may travel to the agent: application, terminal and folder stay in the local file
+  written by the hook. The agent (`hooks/claude-monitor-agent.sh`, macOS only, enabled by hand) must never run
+  commands received from the network nor send keystrokes.
+- Remote Control (Claude Code Remote Control): on every event the hook sends `remote_session_id`, the
+  `bridgeSessionId` read from `~/.claude/sessions/<pid>.json`; when it is missing, Remote Control is off.
+  For these sessions `FocusService` picks the Mac used last: it asks the agents for their idle seconds
+  (`probe` event, answer on `POST /api/agent/activity`) and brings the window forward on the session's Mac,
+  or sends the `remote` event to a Mac with the Claude app, whose agent opens `claude://code/<id>`.
+  Here too only the identifier travels, accepted only in the `session_`/`cse_` form by both `HookEvent` and the
+  agent, which builds the link itself. Idle time is reported only on request, never continuously.
+- Focus protections, not to be loosened: the agent counts anomalous requests (and separately the idle-time
+  requests, with their own hourly limit) and locks itself (`agent.locked`, removed only on the Mac with `unlock`,
+  never from the network); the user's switch (`users.focus_enabled`, `FocusService`) disconnects the agents and
+  makes requests and streams answer 403.
+- Multi-user: sessions, history, SSE stream and push subscriptions belong to a user.
+  Every new query or endpoint on this data must filter by the `userId` taken from `AuthUser`.
+- `AdminBootstrap` creates the initial administrator from `ADMIN_USERNAME` and `ADMIN_PASSWORD` only when no users
+  exist, and assigns it the data without an owner and the `HOOK_TOKEN`, if set.
+- The database schema changes only through new Flyway migrations in `src/main/resources/db/migration`;
+  Hibernate runs in `validate` mode. Never edit an applied migration, not even its comments: Flyway checksums
+  the whole file. That is why V1–V5 keep their original Italian comments.
+- Error messages of the API are in English and are not shown as they are: the frontend maps status codes to
+  translated messages.
 
-## Struttura del frontend
+## Frontend structure
 
-- `core/`: servizi (`SessionStore`, `AudioService`, `PushService`, `SettingsService`, `AuthService`, `AdminApi`).
+- `core/`: services (`SessionStore`, `AudioService`, `PushService`, `SettingsService`, `AuthService`, `AdminApi`,
+  `I18n`).
 - `features/`: `login`, `dashboard`, `session-detail`, `settings`, `hook-keys`, `users`, `account`.
-- Componenti standalone, stato con signal, template con `@if` e `@for`.
-- Lo stream SSE usa `fetch` con header `Authorization` e `ngsw-bypass`, non `EventSource`.
-- I suoni partono solo sulle transizioni di stato rilevate in `SessionStore.trackTransition`.
-- Il primo tocco su una card evidenziata la segna solo come vista (ferma evidenziazione e ripetizione del
-  suono); il dettaglio si apre toccando una card già vista (`Dashboard.open`).
-- Sulle card delle macchine con l'agente collegato (`SessionStore.focusMachines`) c'è il pulsante del focus:
-  una barra "Apri finestra" a tutta larghezza attaccata sotto la card (fuori dal pulsante della card, perché un
-  pulsante non può contenerne un altro), piena nel colore dello stato quando la card sta avvisando.
-  `Dashboard.focus` porta avanti la finestra e segna la card come vista; l'esito dice su quale macchina si è
-  aperta la sessione. Le sessioni in controllo remoto di macchine senza agente hanno la barra "Apri in Claude"
-  se un altro Mac con l'agente ha l'app Claude (`SessionStore.claudeAppMachines`).
-- Tema chiaro e scuro: i colori passano tutti dalle variabili `--cm-*` di `styles.scss`, mai valori fissi nei
-  componenti. La classe `app-dark` su `<html>` attiva il tema scuro anche per PrimeNG; la imposta
-  `SettingsService` e, prima dell'avvio, lo script in `index.html` (stessa chiave `cm.settings`).
-- Dopo la prima attivazione i suoni restano attivi: `AudioService` sblocca l'audio da solo al primo tocco
-  di ogni apertura (limite del browser), senza richiederlo all'utente.
-- `UpdateService` controlla le nuove versioni ogni 5 minuti e al ritorno in primo piano; quando il service
-  worker ne ha scaricata una, la attiva e ricarica la pagina.
-- Dopo la creazione di una chiave hook la finestra offre lo script di installazione: `HookInstaller` lo
-  compone nel browser dai modelli `hooks/install.sh` e `hooks/install.ps1` e dagli script dell'hook.
-  La build li pubblica sotto `/hooks` tramite il collegamento simbolico `frontend/hook-scripts`; per questo
-  il contesto di build Docker del frontend è la radice del repository.
-- Le icone e i suoni in `frontend/public` sono generati da `scripts/generate-assets.py`
-  (`python3 scripts/generate-assets.py frontend/public`, richiede Pillow): non modificarli a mano.
-- PrimeNG 22 richiede una chiave di licenza PrimeUI. Non sta nel repository: è la variabile `PRIMENG_LICENSE`
-  del file `.env`, che `frontend/scripts/defines.mjs` inserisce nel bundle come `PRIMENG_LICENSE_KEY`
-  (`npm start` e `npm run build`; in Docker arriva come argomento di build). Secondo i termini può stare
-  nel bundle, ma non va pubblicata perché altri la usino. `npx ng serve` diretto parte senza chiave.
+- Standalone components, state with signals, templates with `@if` and `@for`.
+- The SSE stream uses `fetch` with the `Authorization` header and `ngsw-bypass`, not `EventSource`.
+- Sounds play only on the state transitions detected in `SessionStore.trackTransition`.
+- The first tap on a highlighted card only marks it as seen (stops highlight and sound repetition); the detail
+  opens by tapping a card already seen (`Dashboard.open`).
+- Cards of machines with the agent connected (`SessionStore.focusMachines`) have the focus button: a full-width
+  "Open window" bar attached below the card (outside the card button, because a button can't contain another
+  one), filled with the state color while the card is alerting. `Dashboard.focus` brings the window forward and
+  marks the card as seen; the outcome tells on which machine the session opened. Remote Control sessions of
+  machines without an agent get the "Open in Claude" bar if another Mac with the agent has the Claude app
+  (`SessionStore.claudeAppMachines`).
+- Light and dark theme: all colors go through the `--cm-*` variables of `styles.scss`, never hard-coded values in
+  components. The `app-dark` class on `<html>` enables the dark theme for PrimeNG too; `SettingsService` sets it
+  and, before startup, so does the script in `index.html` (same `cm.settings` key).
+- After the first activation sounds stay on: `AudioService` unlocks audio on its own at the first tap after each
+  opening (a browser limitation), without asking the user.
+- `UpdateService` checks for new versions every 5 minutes and when the app returns to the foreground; when the
+  service worker has downloaded one, it activates it and reloads the page.
+- After a hook key is created the dialog offers the installation script: `HookInstaller` composes it in the
+  browser from the `hooks/install.sh` and `hooks/install.ps1` templates and the hook scripts.
+  The build publishes them under `/hooks` through the `frontend/hook-scripts` symlink; that is why the Docker build
+  context of the frontend is the repository root.
+- Icons and sounds in `frontend/public` are generated by `scripts/generate-assets.py`
+  (`python3 scripts/generate-assets.py frontend/public`, needs Pillow): don't edit them by hand.
+- PrimeNG 22 needs a PrimeUI license key. It is not in the repository: it is the `PRIMENG_LICENSE` variable of the
+  `.env` file, which `frontend/scripts/defines.mjs` puts into the bundle as `PRIMENG_LICENSE_KEY`
+  (`npm start` and `npm run build`; in Docker it arrives as a build argument). The terms allow it in the bundle,
+  but it must not be published for others to use. A direct `npx ng serve` starts without the key.
 
-## iPadOS: vincoli da rispettare
+## Internationalization
 
-La dashboard è usata soprattutto come PWA su iPad, dove Safari ha comportamenti che Chrome non mostra.
-Le regole qui sotto nascono da problemi reali: non vanno "semplificate" senza provare su un iPad.
+- The interface is in English and Italian, with Transloco. Translations are in `frontend/src/i18n/<lang>.json`;
+  `en.json` is the reference. They are bundled as lazy chunks (`I18n`, `BundledTranslationLoader`), so they are
+  cached by the service worker and work offline; the app starts only after the active language is loaded.
+- Every text shown to the user goes through a key: the `transloco` pipe in templates, `I18n.t()` in code (it reads
+  the `language` signal, so computed values follow a language change). Error signals hold keys, not texts.
+- A new key goes into every language file; `npm run i18n:check` (also in CI) fails on missing keys, different
+  `{{ params }}` or unknown keys used in the code.
+- Dates use `I18n.date()` (`Intl`, with the browser locale when it matches the language).
+- The language is a device setting (`Settings.language`, `auto` follows the browser). `index.html` sets
+  `<html lang>` before startup with the same rule.
+- To add a language: a new `src/i18n/<lang>.json`, the code in `LANGUAGES`, `LANGUAGE_NAMES` and `TRANSLATIONS`
+  of `i18n.service.ts`, the check in `index.html`, `messages_<lang>.properties` and `PushNotifier.LANGUAGES` in the
+  backend.
+- Hook scripts, agent, logs, API errors and documentation are in English only.
 
-- **Audio**: lo sblocco avviene solo dentro un evento `click` (o `keydown`). `pointerdown` e `touchend`
-  non valgono come gesto; `resume()` non va mai chiamato all'avvio o fuori da un gesto.
-- **Audio**: non creare e chiudere contesti `AudioContext` a ripetizione. Può lasciare l'audio dell'iPad
-  bloccato con `InvalidStateError: Failed to start the audio device` finché non si riavvia il dispositivo.
-  Se compare quell'errore, prima di toccare il codice si riavvia l'iPad.
-- **Audio**: se Web Audio viene rifiutato, `AudioService` ripiega su elementi `<audio>`, che su iPadOS
-  ignorano il volume impostato. La riga "Stato audio" nelle impostazioni mostra quale via è attiva.
-- **Tocchi**: il documento non scorre mai (`html` e `body` con `overflow: hidden`); scorre solo
-  `app-dashboard`. Le finestre modali usano `appendTo="body"`. Se la pagina scorre sotto una finestra
-  modale, su iPadOS i tocchi finiscono spostati di una riga.
-- **Click ovunque**: sui dispositivi touch `body` ha `cursor: pointer`, altrimenti iPadOS non genera
-  `click` sulle zone non interattive e il primo tocco non sblocca l'audio.
-- **Prove**: dal Mac non si può ispezionare la PWA sull'iPad (serve la Modalità sviluppatore).
-  Per diagnosticare, far inviare all'app una traccia temporanea al server e leggerla dai log di nginx.
+## iPadOS: constraints to respect
 
-## Ambiente attuale
+The dashboard is used mostly as a PWA on iPad, where Safari behaves in ways Chrome doesn't show.
+The rules below come from real problems: don't "simplify" them without testing on an iPad.
 
-- Lo stack gira in locale sul Mac con docker compose, esposto dal tunnel Cloudflare del profilo `tunnel`.
-  Non c'è ancora un deploy su server né una pipeline CI.
-- Repository: `github.com/sartoriadelcodice/claude-monitor`, pubblico: niente segreti, chiavi di licenza
-  o dati di macchine e clienti nei file e nei messaggi di commit.
-- Il token del tunnel si chiama `CLAUDE_MONITOR_TUNNEL_TOKEN` e non `TUNNEL_TOKEN`, perché una variabile
-  con quel nome già presente nella shell avrebbe la precedenza sul file `.env`.
-- Gli hook sono installati in `~/.claude/settings.json` delle macchine monitorate; l'esempio aggiornato
-  è `hooks/settings.example.json`.
+- **Audio**: unlocking happens only inside a `click` (or `keydown`) event. `pointerdown` and `touchend` don't count
+  as a gesture; `resume()` must never be called at startup or outside a gesture.
+- **Audio**: don't create and close `AudioContext` instances repeatedly. It can leave the iPad audio stuck with
+  `InvalidStateError: Failed to start the audio device` until the device is restarted.
+  If that error shows up, restart the iPad before touching the code.
+- **Audio**: if Web Audio is refused, `AudioService` falls back to `<audio>` elements, which on iPadOS ignore the
+  volume setting. The "Audio status" line in the settings shows which path is active.
+- **Taps**: the document never scrolls (`html` and `body` with `overflow: hidden`); only `app-dashboard` scrolls.
+  Modal dialogs use `appendTo="body"`. If the page scrolls under a modal dialog, on iPadOS taps land one row off.
+- **Click anywhere**: on touch devices `body` has `cursor: pointer`, otherwise iPadOS doesn't fire `click` on
+  non-interactive areas and the first tap doesn't unlock audio.
+- **Testing**: the PWA on the iPad can't be inspected from the Mac (it needs Developer Mode).
+  To diagnose, have the app send a temporary trace to the server and read it from the nginx logs.
 
-## Versioni
+## Current environment
 
-- La versione è quella di `frontend/package.json`, allineata a `backend/pom.xml`: va incrementata a ogni rilascio.
-- `frontend/scripts/build.mjs` aggiunge l'identificativo di build (data e ora UTC). Entrambi compaiono
-  nelle impostazioni della dashboard.
-- Per pubblicare una modifica del frontend basta ricostruire l'immagine: i dispositivi si aggiornano da soli.
+- The stack runs locally on the Mac with docker compose, exposed by the Cloudflare tunnel of the `tunnel` profile.
+- Repository: `github.com/sartoriadelcodice/claude-monitor`, public: no secrets, license keys or data about
+  machines and clients in files and commit messages. Screenshots come from the demo stack
+  (`scripts/demo-events.sh`), never from real sessions.
+- CI (`.github/workflows/ci.yml`) runs the backend tests, the translation check and the frontend build on every
+  push and pull request; `.github/workflows/pages.yml` publishes the `site/` folder to GitHub Pages.
+- The tunnel token is called `CLAUDE_MONITOR_TUNNEL_TOKEN` and not `TUNNEL_TOKEN`, because a variable with that
+  name already set in the shell would take precedence over the `.env` file.
+- Hooks are installed in `~/.claude/settings.json` of the monitored machines; the up-to-date example is
+  `hooks/settings.example.json`.
 
-## Convenzioni
+## Versions
 
-- Commenti e documentazione in italiano; codice, nomi e messaggi di commit in inglese.
-- Ogni modifica alla mappatura degli stati va accompagnata dal test in `SessionStateMapperTest`.
-- Nessun segreto nel repository: `.env` è escluso da git.
-- Messaggi di commit: solo titolo e descrizione. Niente righe `Co-Authored-By`, niente link a sessioni di
-  Claude Code e nessun riferimento a repository privati o ad altri servizi di hosting.
-- Autore dei commit: `Sartoria del Codice <info@sartoriadelcodice.it>` (già impostato nella configurazione
-  git locale del repository).
+- The version is the one in `frontend/package.json`, aligned with `backend/pom.xml`: bump it at every release and
+  add the changes to `CHANGELOG.md`.
+- `frontend/scripts/build.mjs` adds the build identifier (UTC date and time). Both appear in the dashboard settings.
+- To publish a frontend change it is enough to rebuild the image: devices update on their own.
+
+## Conventions
+
+- Code, comments, documentation and commit messages in English. The interface is translated (see
+  Internationalization); `README.it.md` and `site/it/` are the Italian versions of the README and of the site and
+  must follow changes to their English counterparts.
+- Every change to the state mapping comes with its test in `SessionStateMapperTest`.
+- No secrets in the repository: `.env` is excluded from git.
+- Commit messages: title and description only. No `Co-Authored-By` lines, no links to Claude Code sessions and no
+  references to private repositories or other hosting services.
+- Commit author: `Sartoria del Codice <info@sartoriadelcodice.it>` (already set in the local git configuration of the
+  repository).

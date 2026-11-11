@@ -2,6 +2,6 @@ package it.sartoriadelcodice.claudemonitor.auth;
 
 import it.sartoriadelcodice.claudemonitor.user.Role;
 
-/** Utente autenticato della richiesta corrente (da JWT o da chiave hook). */
+/** Authenticated user of the current request (from a JWT or a hook key). */
 public record AuthUser(Long id, String username, Role role) {
 }
