@@ -24,6 +24,57 @@ field() {
   printf '%s' "$payload" | sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
+# Valore di un campo stringa del payload, con jq quando c'è
+value() {
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$payload" | jq -r --arg name "$1" '.[$name] // empty' 2>/dev/null
+  else
+    field "$1"
+  fi
+}
+
+# Finestra della sessione (solo macOS): serve a claude-monitor-agent.sh per portarla in primo piano quando
+# la dashboard lo chiede. Applicazione, terminale e cartella restano in un file locale: non vengono inviati.
+remember_window() {
+  local id event file pid parent tty found
+  id="$(value session_id)"
+  case "$id" in '' | *[!A-Za-z0-9_-]*) return ;; esac
+  event="$(value hook_event_name)"
+  file="$HOME/.claude/claude-monitor/windows/$id"
+  if [ "$event" = "SessionEnd" ]; then
+    rm -f "$file"
+    return
+  fi
+  # All'avvio e alla ripresa la finestra può essere un'altra; negli altri eventi si scrive solo se manca
+  if [ "$event" != "SessionStart" ] && [ -f "$file" ]; then
+    return
+  fi
+  # Il terminale è quello del primo antenato che ne ha uno, cioè Claude Code
+  pid=$$
+  found=""
+  for _ in 1 2 3 4 5 6 7 8; do
+    read -r parent tty <<EOF
+$(ps -o ppid=,tty= -p "$pid" 2>/dev/null)
+EOF
+    case "$tty" in ttys[0-9]*)
+      found="/dev/$tty"
+      break
+      ;;
+    esac
+    case "$parent" in '' | 0 | 1) break ;; esac
+    pid="$parent"
+  done
+  # Cartella e file leggibili solo dall'utente: è da qui che l'agente decide quale finestra portare avanti
+  (umask 077 && mkdir -p "${file%/*}") 2>/dev/null || return
+  umask 077
+  printf '%s\n%s\n%s\n' "${__CFBundleIdentifier:-}" "$found" "${CLAUDE_PROJECT_DIR:-$(value cwd)}" \
+    >"$file" 2>/dev/null
+}
+
+if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+  remember_window
+fi
+
 # Il modello arriva con SessionStart solo in alcuni casi (mai dopo /clear): quando manca si legge
 # dall'ultima risposta nel transcript. Solo su Stop e PostToolUse, quando il transcript è di sicuro
 # aggiornato: negli altri eventi potrebbe riportare il modello precedente a un cambio.

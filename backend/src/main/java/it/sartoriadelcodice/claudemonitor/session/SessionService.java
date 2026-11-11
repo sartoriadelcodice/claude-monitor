@@ -129,6 +129,12 @@ public class SessionService {
                 .toList();
     }
 
+    /** Sessione dell'utente; vuoto se non esiste o appartiene a un altro. */
+    @Transactional(readOnly = true)
+    public Optional<SessionDto> find(Long userId, String sessionId) {
+        return sessions.findByIdAndUserId(sessionId, userId).map(SessionDto::from);
+    }
+
     @Transactional(readOnly = true)
     public Optional<List<EventDto>> eventsOf(Long userId, String sessionId) {
         if (sessions.findByIdAndUserId(sessionId, userId).isEmpty()) {

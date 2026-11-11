@@ -24,6 +24,8 @@ interface SessionGroup {
   sessions: Session[];
 }
 
+type FocusState = 'sending' | 'ok' | 'error';
+
 /** Vista principale: contatore delle sessioni in attesa e griglia di card. */
 @Component({
   selector: 'app-dashboard',
@@ -52,6 +54,8 @@ export class Dashboard implements OnInit, OnDestroy {
   protected readonly settingsOpen = signal(false);
   protected readonly hookKeysOpen = signal(false);
   protected readonly usersOpen = signal(false);
+  /** Esito dell'ultima richiesta di focus per sessione, mostrato per qualche secondo sul pulsante. */
+  protected readonly focusState = signal<ReadonlyMap<string, FocusState>>(new Map());
 
   protected readonly machines = computed(() =>
     [...new Set(this.store.sessions().map((s) => s.machine))].sort((a, b) => a.localeCompare(b)),
@@ -153,5 +157,52 @@ export class Dashboard implements OnInit, OnDestroy {
       return;
     }
     this.selectedId.set(session.id);
+  }
+
+  /** Il pulsante del focus compare solo se la macchina ha l'agente collegato e la sessione è ancora aperta. */
+  protected focusable(session: Session): boolean {
+    return !session.archived && session.status !== 'ENDED' && this.store.focusMachines().has(session.machine);
+  }
+
+  /**
+   * Porta in primo piano, sulla macchina della sessione, la finestra che la ospita.
+   * Chi va alla finestra ha visto l'avviso: la card viene anche segnata come vista.
+   */
+  protected async focus(session: Session): Promise<void> {
+    if (this.focusState().get(session.id) === 'sending') {
+      return;
+    }
+    this.setFocusState(session.id, 'sending');
+    if (this.highlighted(session)) {
+      void this.store.markSeen(session);
+    }
+    const delivered = await this.store.focus(session);
+    this.setFocusState(session.id, delivered ? 'ok' : 'error');
+    setTimeout(() => this.setFocusState(session.id, null), 2_500);
+  }
+
+  protected focusIcon(session: Session): string {
+    switch (this.focusState().get(session.id)) {
+      case 'sending':
+        return 'pi pi-spin pi-spinner';
+      case 'ok':
+        return 'pi pi-check';
+      case 'error':
+        return 'pi pi-times';
+      default:
+        return 'pi pi-window-maximize';
+    }
+  }
+
+  private setFocusState(id: string, state: FocusState | null): void {
+    this.focusState.update((map) => {
+      const next = new Map(map);
+      if (state) {
+        next.set(id, state);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
   }
 }

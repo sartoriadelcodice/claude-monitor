@@ -33,6 +33,10 @@ public class User {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    /** Interruttore del focus delle finestre: spento, vale per tutte le macchine e le sessioni dell'utente. */
+    @Column(name = "focus_enabled", nullable = false)
+    private boolean focusEnabled = true;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -76,6 +80,14 @@ public class User {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isFocusEnabled() {
+        return focusEnabled;
+    }
+
+    public void setFocusEnabled(boolean focusEnabled) {
+        this.focusEnabled = focusEnabled;
     }
 
     public Instant getCreatedAt() {

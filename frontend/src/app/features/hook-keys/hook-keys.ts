@@ -138,6 +138,22 @@ import { HookInstaller, InstallerPlatform, detectPlatform } from '../../core/hoo
         </p>
       </section>
 
+      <section class="update">
+        <strong>Focus delle finestre (solo macOS)</strong>
+        <p class="muted">
+          Facoltativo. Con questo comando il Mac avvia un piccolo agente che resta collegato alla dashboard:
+          sulle card delle sue sessioni compare un pulsante che porta in primo piano la finestra di Claude Code.
+          L'agente riceve solo l'identificativo della sessione: non esegue comandi e non invia tasti.
+        </p>
+        <p-button [label]="agentCopied() ? 'Copiato' : 'Copia il comando'" icon="pi pi-copy" size="small"
+                  severity="secondary" (onClick)="copyAgentCommand()" />
+        <code class="command">{{ installer.agentCommand() }}</code>
+        <p class="muted note">
+          Da eseguire in un terminale del Mac, dopo aver aggiornato l'hook. Lo stesso comando aggiorna l'agente;
+          per toglierlo: <code>bash ~/.claude/hooks/claude-monitor-agent.sh uninstall</code>.
+        </p>
+      </section>
+
       <ng-template #footer>
         <p-button label="Chiudi" (onClick)="closed.emit()" />
       </ng-template>
@@ -280,6 +296,7 @@ export class HookKeys implements OnInit {
   protected readonly created = signal<CreatedHookKey | null>(null);
   protected readonly copied = signal(false);
   protected readonly updateCopied = signal(false);
+  protected readonly agentCopied = signal(false);
   protected readonly confirming = signal<number | null>(null);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -321,6 +338,16 @@ export class HookKeys implements OnInit {
       await navigator.clipboard.writeText(this.installer.updateCommand(this.platform()));
       this.updateCopied.set(true);
       setTimeout(() => this.updateCopied.set(false), 3_000);
+    } catch {
+      this.error.set('Copia non riuscita: seleziona il comando e copialo a mano.');
+    }
+  }
+
+  protected async copyAgentCommand(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.installer.agentCommand());
+      this.agentCopied.set(true);
+      setTimeout(() => this.agentCopied.set(false), 3_000);
     } catch {
       this.error.set('Copia non riuscita: seleziona il comando e copialo a mano.');
     }

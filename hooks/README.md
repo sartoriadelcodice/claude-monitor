@@ -71,6 +71,55 @@ curl -fsS -o ~/.claude/hooks/claude-monitor-hook.sh 'https://monitor.example.com
   && chmod +x ~/.claude/hooks/claude-monitor-hook.sh
 ```
 
+## Focus delle finestre (macOS, facoltativo)
+
+Con l'agente attivo, sulle card delle sessioni di quel Mac compare un pulsante che porta in primo piano la
+finestra di Claude Code. L'installazione dell'hook non lo avvia: va attivato a mano su ogni Mac. Il comando
+pronto è nella finestra «Chiavi hook» della dashboard:
+
+```bash
+curl -fsS -o ~/.claude/hooks/claude-monitor-agent.sh 'https://monitor.example.com/hooks/claude-monitor-agent.sh' \
+  && bash ~/.claude/hooks/claude-monitor-agent.sh install
+```
+
+Come funziona:
+
+- Su macOS l'hook annota in `~/.claude/claude-monitor/windows/<session_id>` l'applicazione che ospita la
+  sessione, il suo terminale e la cartella del progetto. Il file resta sulla macchina e non viene inviato;
+  si scrive a `SessionStart` (o al primo evento se manca) e si elimina a `SessionEnd`.
+- `claude-monitor-agent.sh install` registra un LaunchAgent (`it.sartoriadelcodice.claude-monitor-agent`)
+  che resta collegato a `GET /api/agent/stream` con la chiave hook. URL, chiave e nome della macchina li
+  legge dalla sezione `env` di `~/.claude/settings.json`: nel file di launchd non ci sono segreti.
+- Dal backend arriva solo l'identificativo della sessione. L'agente lo controlla, legge il file locale e:
+  - Terminale e iTerm: seleziona la scheda con quel terminale e porta avanti la finestra (AppleScript);
+  - VS Code, VSCodium e Cursor: apre la cartella del progetto, che porta avanti la finestra che l'ha già aperta
+    (se nessuna finestra ha quella cartella, ne apre una nuova);
+  - altre applicazioni, o scheda non trovata (ad esempio dentro tmux): porta avanti l'applicazione.
+- L'agente non esegue comandi ricevuti dalla rete e non invia tasti. Al primo utilizzo macOS chiede di
+  consentire il controllo di Terminale: va accettato.
+- Registro: `~/Library/Logs/claude-monitor-agent.log`. Prova locale, senza passare dal backend:
+  `bash ~/.claude/hooks/claude-monitor-agent.sh focus <session_id>`.
+- Rimozione: `bash ~/.claude/hooks/claude-monitor-agent.sh uninstall`.
+
+### Protezioni
+
+- **Solo https**: l'agente non si collega a un indirizzo `http`, tranne verso la macchina stessa.
+- **Richieste anomale**: ognuna vale dei punti, sommati su dieci minuti. Un identificativo malformato vale
+  10 punti; una sessione che il Mac non conosce o una richiesta a meno di due secondi dalla precedente
+  valgono 1 punto. A 10 punti, o oltre 60 focus eseguiti in un'ora, l'agente si blocca.
+- **Blocco**: l'agente chiude il collegamento, mostra una notifica, scrive il motivo in
+  `~/.claude/claude-monitor/agent.locked` e non si ricollega. Dalla dashboard il pulsante del focus sparisce.
+  Il blocco non si toglie dalla rete: dopo aver letto il registro si lancia sul Mac
+  `bash ~/.claude/hooks/claude-monitor-agent.sh unlock`. Lo stato si vede con `status`.
+- **Interruttore nella dashboard**: in Impostazioni, «Focus delle finestre» spegne la funzione per tutte le
+  macchine e le sessioni dell'utente. Il backend scollega gli agenti e ne rifiuta i nuovi collegamenti;
+  l'agente riprova ogni minuto e riparte da solo quando l'interruttore torna acceso.
+
+Le soglie sono in testa allo script (`suspect_limit`, `suspect_window`, `hourly_limit`, `min_interval`).
+
+Le sessioni già aperte diventano raggiungibili dal primo evento successivo all'aggiornamento dell'hook.
+Su Linux e Windows il focus non è disponibile.
+
 ## Prova manuale
 
 ```bash

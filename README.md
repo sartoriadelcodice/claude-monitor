@@ -221,7 +221,20 @@ riattiva un utente. Ogni utente crea poi le proprie chiavi hook e vede soltanto 
 
 - Il servizio va esposto solo in HTTPS, dietro un reverse proxy o un tunnel: la porta del frontend parla HTTP.
 - Le password sono salvate con bcrypt, le chiavi hook solo come hash SHA-256. Una chiave hook può soltanto
-  inviare eventi: non legge nulla.
+  inviare eventi e ascoltare le richieste di focus destinate alla propria macchina: non legge sessioni né
+  cronologia e non può chiedere il focus.
+- Il focus delle finestre è facoltativo e si attiva a mano su ogni Mac. La richiesta parte solo dalla
+  dashboard di un utente autenticato, per una sua sessione; all'agente arriva soltanto l'identificativo della
+  sessione, e la finestra da portare avanti la ricava da un file locale scritto dall'hook. L'agente non
+  esegue comandi ricevuti dalla rete, non invia tasti e non usa i permessi di Accessibilità: chi controllasse
+  il server potrebbe al più portare in primo piano la finestra di una sessione.
+- L'agente riconosce le richieste anomale (identificativi malformati, sessioni che il Mac non conosce,
+  raffiche, volumi fuori misura) e si blocca da solo: si scollega, avvisa con una notifica e riparte solo
+  con un comando dato sul Mac. Si collega soltanto in https.
+- Nelle impostazioni della dashboard un interruttore spegne il focus per tutte le macchine e le sessioni
+  dell'utente: il backend scollega subito gli agenti e rifiuta richieste e nuovi collegamenti. L'interruttore
+  sta sul server: protegge da un uso indesiderato dell'account, non da un server compromesso, contro cui
+  vale il blocco dell'agente.
 - I tentativi di login sono limitati da nginx (10 al minuto, poi risposta 429). Dietro un proxy il limite
   vale per tutti i client insieme.
 - Il login resta valido per `JWT_TTL` (30 giorni se non impostato). Disattivare un utente ha effetto subito;
@@ -240,6 +253,10 @@ Per segnalare un problema di sicurezza scrivi a <info@sartoriadelcodice.it> inve
 | `GET /api/sessions/{id}/events`      | Cronologia eventi della sessione                        | JWT            |
 | `PATCH /api/sessions/{id}`           | Segna come vista o archivia (`seen`, `archived`)        | JWT            |
 | `GET /api/stream`                    | Aggiornamenti in tempo reale (SSE)                      | JWT            |
+| `POST /api/sessions/{id}/focus`      | Porta in primo piano la finestra della sessione         | JWT            |
+| `GET /api/focus/machines`            | Macchine con l'agente del focus collegato               | JWT            |
+| `GET` e `PUT /api/focus/settings`    | Interruttore del focus dell'utente (`enabled`)          | JWT            |
+| `GET /api/agent/stream`              | Richieste di focus per l'agente di una macchina (SSE, `machine`) | Chiave hook |
 | `GET /api/push/public-key`           | Chiave pubblica VAPID                                   | JWT            |
 | `POST` e `DELETE /api/push/subscriptions` | Registra o rimuove un dispositivo                  | JWT            |
 | `GET` e `POST /api/hook-keys`        | Elenca o crea le proprie chiavi hook                    | JWT            |

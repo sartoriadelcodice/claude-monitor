@@ -1,4 +1,4 @@
-import { Component, inject, output, signal } from '@angular/core';
+import { Component, OnInit, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -110,6 +110,23 @@ import { APP_BUILD, APP_VERSION } from '../../core/version';
                        (ngModelChange)="settingsService.update({ zoomSeconds: $event ?? 10 })" />
       </div>
 
+      <h3>Focus delle finestre</h3>
+      <div class="row">
+        <span>Consenti alla dashboard di portare in primo piano le finestre di Claude Code</span>
+        <p-toggleswitch [ngModel]="focusEnabled() === true" [disabled]="focusEnabled() === null || focusBusy()"
+                        (ngModelChange)="toggleFocus($event)" />
+      </div>
+      <p class="muted diagnostics">
+        @if (focusError()) {
+          Modifica non riuscita: riprova.
+        } @else if (focusEnabled() === false) {
+          Spento su tutte le tue macchine e sessioni: gli agenti sono stati scollegati e il server rifiuta
+          ogni richiesta di focus finché non lo riaccendi.
+        } @else {
+          Vale per tutte le tue macchine e sessioni. Spegnendolo gli agenti vengono scollegati subito.
+        }
+      </p>
+
       <h3>Versione</h3>
       <div class="row">
         <span>
@@ -186,7 +203,7 @@ import { APP_BUILD, APP_VERSION } from '../../core/version';
     }
   `,
 })
-export class Settings {
+export class Settings implements OnInit {
   protected readonly settingsService = inject(SettingsService);
   protected readonly audio = inject(AudioService);
   protected readonly push = inject(PushService);
@@ -201,6 +218,31 @@ export class Settings {
   protected readonly settings = this.settingsService.settings;
 
   protected readonly pushBusy = signal(false);
+
+  /** Interruttore del focus, salvato sul server: null finché non è stato letto. */
+  protected readonly focusEnabled = signal<boolean | null>(null);
+  protected readonly focusBusy = signal(false);
+  protected readonly focusError = signal(false);
+
+  ngOnInit(): void {
+    void this.store.focusEnabled().then((enabled) => this.focusEnabled.set(enabled));
+  }
+
+  protected async toggleFocus(enabled: boolean): Promise<void> {
+    const previous = this.focusEnabled();
+    this.focusBusy.set(true);
+    this.focusError.set(false);
+    // Si mostra subito la scelta; se il salvataggio fallisce si torna al valore di prima
+    this.focusEnabled.set(enabled);
+    try {
+      this.focusEnabled.set(await this.store.setFocusEnabled(enabled));
+    } catch {
+      this.focusEnabled.set(previous);
+      this.focusError.set(true);
+    } finally {
+      this.focusBusy.set(false);
+    }
+  }
 
   protected async togglePush(enabled: boolean): Promise<void> {
     this.pushBusy.set(true);

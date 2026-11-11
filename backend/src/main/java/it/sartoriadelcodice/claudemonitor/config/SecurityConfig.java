@@ -17,7 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * Due meccanismi di autenticazione, entrambi via header Bearer:
- * chiave hook personale (solo POST /api/events) e JWT per il frontend.
+ * chiave hook personale (POST /api/events e stream dell'agente sotto /api/agent/) e JWT per il frontend.
  */
 @Configuration
 public class SecurityConfig {
@@ -44,7 +44,8 @@ public class SecurityConfig {
                         // I dispatch asincroni (SSE) sono già stati autorizzati alla richiesta iniziale
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/auth/login", "/actuator/health").permitAll()
-                        .requestMatchers(AuthFilter.EVENTS_PATH).hasRole(ROLE_HOOK)
+                        .requestMatchers(AuthFilter.EVENTS_PATH, AuthFilter.AGENT_PATH_PREFIX + "**")
+                        .hasRole(ROLE_HOOK)
                         .requestMatchers("/api/users/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/api/**").hasRole(ROLE_USER)
                         .anyRequest().denyAll())

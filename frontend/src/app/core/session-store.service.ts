@@ -23,6 +23,8 @@ export class SessionStore {
   readonly sessions = signal<Session[]>([]);
   readonly connected = signal(false);
   readonly includeHistory = signal(false);
+  /** Macchine su cui un agente può portare in primo piano la finestra di una sessione. */
+  readonly focusMachines = signal<ReadonlySet<string>>(new Set());
   /** Orologio aggiornato periodicamente, per i tempi mostrati sulle card. */
   readonly now = signal(Date.now());
 
@@ -89,6 +91,7 @@ export class SessionStore {
     this.zoomed.set(new Set());
     this.firstLoadDone = false;
     this.sessions.set([]);
+    this.focusMachines.set(new Set());
   }
 
   setIncludeHistory(value: boolean): void {
@@ -97,6 +100,7 @@ export class SessionStore {
   }
 
   async load(): Promise<void> {
+    void this.loadFocusMachines();
     try {
       const list = await firstValueFrom(
         this.http.get<Session[]>('api/sessions', {
@@ -112,6 +116,52 @@ export class SessionStore {
       this.sessions.set(list);
     } catch {
       // Errore di rete: si ritenta al prossimo giro (il 401 è gestito dall'interceptor)
+    }
+  }
+
+  /**
+   * Chiede alla macchina della sessione di portare in primo piano la finestra che la ospita.
+   * Restituisce false se la richiesta non arriva a un agente (macchina spenta o agente non attivo).
+   */
+  async focus(session: Session): Promise<boolean> {
+    try {
+      await firstValueFrom(this.http.post(`api/sessions/${encodeURIComponent(session.id)}/focus`, null));
+      return true;
+    } catch {
+      void this.loadFocusMachines();
+      return false;
+    }
+  }
+
+  /** Interruttore del focus dell'utente; null se il server non risponde. */
+  async focusEnabled(): Promise<boolean | null> {
+    try {
+      return (await firstValueFrom(this.http.get<{ enabled: boolean }>('api/focus/settings'))).enabled;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Accende o spegne il focus per tutte le macchine e le sessioni dell'utente. Allo spegnimento il server
+   * scollega gli agenti: i pulsanti spariscono subito dalle card. Restituisce lo stato salvato.
+   */
+  async setFocusEnabled(enabled: boolean): Promise<boolean> {
+    const saved = await firstValueFrom(this.http.put<{ enabled: boolean }>('api/focus/settings', { enabled }));
+    if (!saved.enabled) {
+      this.focusMachines.set(new Set());
+    }
+    void this.loadFocusMachines();
+    return saved.enabled;
+  }
+
+  /** Macchine con l'agente collegato: solo sulle loro card compare il pulsante del focus. */
+  private async loadFocusMachines(): Promise<void> {
+    try {
+      const machines = await firstValueFrom(this.http.get<string[]>('api/focus/machines'));
+      this.focusMachines.set(new Set(machines));
+    } catch {
+      // Errore di rete: resta l'elenco precedente fino al prossimo giro
     }
   }
 

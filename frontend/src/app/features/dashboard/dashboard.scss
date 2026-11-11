@@ -140,6 +140,63 @@
   gap: 14px;
 }
 
+// Contenitore della card e del pulsante del focus, che le sta sopra nell'angolo in alto a destra
+.card-wrap {
+  position: relative;
+  display: flex;
+
+  .card {
+    flex: 1;
+    min-width: 0;
+  }
+
+  // Le prime righe lasciano libero l'angolo occupato dal pulsante
+  &.with-focus .status,
+  &.with-focus .project {
+    padding-right: 48px;
+  }
+
+  @media (min-width: 600px) {
+    &.zoomed {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+  }
+}
+
+.focus {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font: inherit;
+  color: var(--cm-text);
+  background: var(--cm-surface-2);
+  border: 1px solid var(--cm-border);
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:active {
+    background: var(--cm-border);
+  }
+
+  &.ok {
+    color: var(--cm-green);
+    border-color: var(--cm-green);
+  }
+
+  &.error {
+    color: var(--cm-red);
+    border-color: var(--cm-red);
+  }
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -170,7 +227,7 @@
     opacity: 0.55;
   }
 
-  // Ingrandimento temporaneo: testi più grandi e, dove c'è spazio per due colonne, card doppia
+  // Ingrandimento temporaneo: testi più grandi; dove c'è spazio per due colonne il contenitore raddoppia
   &.zoomed {
     padding: 22px;
     gap: 10px;
@@ -196,11 +253,6 @@
     .message {
       -webkit-line-clamp: 6;
       font-size: 1.3rem;
-    }
-
-    @media (min-width: 600px) {
-      grid-column: span 2;
-      grid-row: span 2;
     }
   }
 }

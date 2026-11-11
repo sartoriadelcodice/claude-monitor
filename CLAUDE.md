@@ -70,18 +70,26 @@ Stati: `IDLE`, `WORKING`, `NEEDS_ATTENTION`, `WAITING_INPUT`, `BACKGROUND`, `END
 ## Struttura del backend
 
 Package base `it.sartoriadelcodice.claudemonitor`, organizzato per funzionalità:
-`config`, `auth`, `user`, `hookkey`, `event`, `session`, `stream`, `push`.
+`config`, `auth`, `user`, `hookkey`, `event`, `session`, `stream`, `push`, `focus`.
 
 - Le modifiche alle sessioni pubblicano un `SessionChangedEvent`; `SessionChangeListener` lo inoltra
   dopo il commit a SSE (`SessionBroadcaster`) e Web Push (`PushNotifier`).
 - Autenticazione sempre con header `Authorization: Bearer`: chiave hook personale per `POST /api/events`
-  (ruolo `HOOK`), JWT per tutto il resto (ruoli `USER` e `ADMIN`). `AuthFilter` rilegge l'utente dal
+  e per `/api/agent/**` (ruolo `HOOK`), JWT per tutto il resto (ruoli `USER` e `ADMIN`). `AuthFilter` rilegge l'utente dal
   database a ogni richiesta, così disattivazione e cambio ruolo hanno effetto subito.
 - Il payload degli hook si salva senza i contenuti della conversazione (`HookEvent.withoutPrivateContent`);
   un campo nuovo con testo di prompt, risposte o comandi va aggiunto lì e negli script di `hooks/`.
 - L'endpoint di una subscription push è un indirizzo a cui il backend invia richieste: passa sempre da
   `PushEndpointValidator` (solo https verso indirizzi pubblici).
 - Le chiavi hook (`hookkey`) sono casuali con prefisso `cmk_`; nel database c'è solo l'hash SHA-256.
+- Focus delle finestre (package `focus`): la dashboard chiama `POST /api/sessions/{id}/focus` e
+  `FocusAgentRegistry` inoltra l'identificativo della sessione all'agente della macchina, collegato a
+  `GET /api/agent/stream` con la chiave hook. Verso l'agente deve viaggiare solo l'identificativo: applicazione,
+  terminale e cartella restano nel file locale scritto dall'hook. L'agente (`hooks/claude-monitor-agent.sh`,
+  solo macOS, attivato a mano) non deve mai eseguire comandi ricevuti dalla rete né inviare tasti.
+- Protezioni del focus, da non allentare: l'agente conta le richieste anomale e si blocca da solo
+  (`agent.locked`, si toglie solo sul Mac con `unlock`, mai dalla rete); l'interruttore dell'utente
+  (`users.focus_enabled`, `FocusService`) scollega gli agenti e fa rispondere 403 a richieste e stream.
 - Multiutente: sessioni, cronologia, stream SSE e subscription push appartengono a un utente.
   Ogni nuova query o endpoint su questi dati deve filtrare per `userId` preso da `AuthUser`.
 - `AdminBootstrap` crea l'amministratore iniziale da `ADMIN_USERNAME` e `ADMIN_PASSWORD` solo se non
@@ -98,6 +106,8 @@ Package base `it.sartoriadelcodice.claudemonitor`, organizzato per funzionalità
 - I suoni partono solo sulle transizioni di stato rilevate in `SessionStore.trackTransition`.
 - Il primo tocco su una card evidenziata la segna solo come vista (ferma evidenziazione e ripetizione del
   suono); il dettaglio si apre toccando una card già vista (`Dashboard.open`).
+- Sulle card delle macchine con l'agente collegato (`SessionStore.focusMachines`) c'è il pulsante del focus,
+  accanto alla card e non dentro; `Dashboard.focus` porta avanti la finestra e segna la card come vista.
 - Tema chiaro e scuro: i colori passano tutti dalle variabili `--cm-*` di `styles.scss`, mai valori fissi nei
   componenti. La classe `app-dark` su `<html>` attiva il tema scuro anche per PrimeNG; la imposta
   `SettingsService` e, prima dell'avvio, lo script in `index.html` (stessa chiave `cm.settings`).

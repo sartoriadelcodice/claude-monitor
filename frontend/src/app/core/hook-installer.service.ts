@@ -62,6 +62,20 @@ export class HookInstaller {
     return `curl -fsS -o ${target} '${source}' && chmod +x ${target}`;
   }
 
+  /**
+   * Comando che scarica e attiva su un Mac l'agente del focus delle finestre (claude-monitor-agent.sh).
+   * È una scelta separata dall'hook: l'agente resta in esecuzione e va attivato di proposito.
+   * Lo stesso comando lo aggiorna. Stringa vuota se l'indirizzo ha caratteri non ammessi.
+   */
+  agentCommand(): string {
+    const url = location.origin;
+    if (!SAFE_URL.test(url)) {
+      return '';
+    }
+    const target = '~/.claude/hooks/claude-monitor-agent.sh';
+    return `curl -fsS -o ${target} '${url}/hooks/claude-monitor-agent.sh' && bash ${target} install`;
+  }
+
   async download(platform: InstallerPlatform, key: string): Promise<void> {
     const files = FILES[platform];
     const url = location.origin;

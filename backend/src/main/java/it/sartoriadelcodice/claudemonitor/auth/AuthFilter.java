@@ -23,12 +23,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Legge l'header Authorization: Bearer.
- * Su /api/events il valore è una chiave hook (ruolo HOOK); altrove è il JWT del frontend (ruolo USER o ADMIN).
+ * Su /api/events e /api/agent/ il valore è una chiave hook (ruolo HOOK); altrove è il JWT del frontend
+ * (ruolo USER o ADMIN).
  */
 @Component
 public class AuthFilter extends OncePerRequestFilter {
 
     public static final String EVENTS_PATH = "/api/events";
+    /** Endpoint usati dall'agente che gira sulle macchine monitorate: stessa chiave degli hook. */
+    public static final String AGENT_PATH_PREFIX = "/api/agent/";
 
     private static final String BEARER = "Bearer ";
 
@@ -49,7 +52,7 @@ public class AuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith(BEARER)) {
             String token = header.substring(BEARER.length()).trim();
             String path = request.getRequestURI().substring(request.getContextPath().length());
-            if (EVENTS_PATH.equals(path)) {
+            if (EVENTS_PATH.equals(path) || path.startsWith(AGENT_PATH_PREFIX)) {
                 hookKeyService.authenticate(token)
                         .ifPresent(user -> authenticate(user, List.of(SecurityConfig.ROLE_HOOK)));
             } else {
