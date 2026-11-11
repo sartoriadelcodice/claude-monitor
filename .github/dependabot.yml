@@ -1,3 +1,6 @@
+# Dependency updates. Major versions are upgraded by hand, because they come with migrations:
+# Angular and PrimeNG with `ng update`, Spring Boot with its migration guide, runtimes (Node, Java)
+# after checking what Angular and Spring Boot support. Dependabot proposes minor and patch updates only.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -9,18 +12,34 @@ updates:
         patterns: ['@angular/*', '@angular-devkit/*', 'typescript']
       primeng:
         patterns: ['primeng', 'primeicons', '@primeuix/*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+      # The TypeScript version is the one supported by Angular: it moves with `ng update`
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-minor']
     open-pull-requests-limit: 5
 
   - package-ecosystem: maven
     directory: /backend
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     open-pull-requests-limit: 5
 
+  # Node and Java base images use floating LTS tags (node:24-alpine, eclipse-temurin:21-jre,
+  # maven:3.9-eclipse-temurin-21) that get patches on every rebuild; moving to another runtime is a
+  # deliberate change. Only nginx is updated by Dependabot.
   - package-ecosystem: docker
     directories: [/backend, /frontend]
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: 'node'
+      - dependency-name: 'eclipse-temurin'
+      - dependency-name: 'maven'
 
   - package-ecosystem: github-actions
     directory: /
