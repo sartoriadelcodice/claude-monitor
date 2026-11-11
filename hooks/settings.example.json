@@ -1,0 +1,29 @@
+{
+  "env": {
+    "CLAUDE_MONITOR_URL": "https://monitor.example.com",
+    "CLAUDE_MONITOR_TOKEN": "cmk_la-tua-chiave-hook"
+  },
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "PostToolUse": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "PostModelSwitch": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "async": true }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/claude-monitor-hook.sh", "timeout": 5 }] }
+    ]
+  }
+}

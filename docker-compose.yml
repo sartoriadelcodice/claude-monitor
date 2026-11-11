@@ -1,0 +1,71 @@
+# Claude Monitor: backend, frontend (nginx) e PostgreSQL.
+# Il frontend è l'unico punto di ingresso: va messo dietro un reverse proxy HTTPS.
+# Per i test locali con HTTPS pubblico: docker compose --profile tunnel up -d
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: claude_monitor
+      POSTGRES_USER: claude_monitor
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Imposta DB_PASSWORD nel file .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claude_monitor -d claude_monitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/claude_monitor
+      DB_USER: claude_monitor
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Facoltativo: vecchio token condiviso, importato come chiave hook dell'amministratore
+      HOOK_TOKEN: ${HOOK_TOKEN:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Imposta ADMIN_PASSWORD nel file .env}
+      JWT_SECRET: ${JWT_SECRET:?Imposta JWT_SECRET nel file .env}
+      JWT_TTL: ${JWT_TTL:-30d}
+      STALE_AFTER: ${STALE_AFTER:-30m}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    ports:
+      # Solo in locale, per lo sviluppo del frontend con ng serve
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      # Il contesto è la radice: la build include gli script di hooks/, scaricabili dalla dashboard
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        PRIMENG_LICENSE: ${PRIMENG_LICENSE:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8088}:80"
+
+  # Tunnel Cloudflare per i test locali (profilo "tunnel"), gestito dalla dashboard Cloudflare:
+  # hostname pubblico e servizio di destinazione (http://frontend:80) si configurano lì.
+  # Protocollo http2 forzato: QUIC (UDP) è spesso bloccato o instabile.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      TUNNEL_TOKEN: ${CLAUDE_MONITOR_TUNNEL_TOKEN:-}
+
+volumes:
+  postgres-data:

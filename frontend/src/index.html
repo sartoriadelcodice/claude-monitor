@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="it" class="app-dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>Claude Monitor</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f17" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Claude Monitor" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <script>
+      // Tema chiaro applicato prima dell'avvio dell'app, per non mostrare un lampo di tema scuro.
+      // Stessa chiave e stessi colori di SettingsService.
+      try {
+        if (JSON.parse(localStorage.getItem('cm.settings') || '{}').theme === 'light') {
+          document.documentElement.classList.remove('app-dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f3f5f9');
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+    <noscript>Per usare Claude Monitor serve JavaScript.</noscript>
+  </body>
+</html>

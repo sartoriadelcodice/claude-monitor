@@ -1,0 +1,80 @@
+@use 'primeicons/primeicons.css';
+
+// Tema chiaro. La classe "app-dark" su <html> attiva quello scuro, anche per PrimeNG
+// (darkModeSelector in app.config.ts); la imposta SettingsService secondo la scelta dell'utente.
+:root {
+  color-scheme: light;
+  --cm-bg: #f3f5f9;
+  --cm-surface: #ffffff;
+  --cm-surface-2: #eef1f6;
+  --cm-border: #d5dbe6;
+  --cm-text: #1a2233;
+  --cm-muted: #5b6678;
+  // Colori di stato un po' più scuri che nel tema scuro, per restare leggibili sul bianco
+  --cm-red: #dc2626;
+  --cm-orange: #ea580c;
+  --cm-green: #16a34a;
+  --cm-blue: #2563eb;
+  --cm-gray: #6b7280;
+}
+
+:root.app-dark {
+  color-scheme: dark;
+  --cm-bg: #0b0f17;
+  --cm-surface: #141a26;
+  --cm-surface-2: #1c2434;
+  --cm-border: #283145;
+  --cm-text: #e6eaf2;
+  --cm-muted: #8e99ad;
+  --cm-red: #ef4444;
+  --cm-orange: #f97316;
+  --cm-green: #22c55e;
+  --cm-blue: #3b82f6;
+  --cm-gray: #6b7280;
+}
+
+// Nella PWA su iPadOS la barra di stato è trasparente con testo bianco (black-translucent, fissato
+// all'installazione): nel tema chiaro le si mette dietro una fascia scura, altrimenti ora e batteria
+// non si leggono.
+:root:not(.app-dark) body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(safe-area-inset-top);
+  background: #0b0f17;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+// Il documento non scorre mai: scorre solo il contenuto dell'app (vedi dashboard.scss).
+// Su iPadOS, se la pagina è scorsa quando si apre una finestra modale, i tocchi finiscono
+// spostati rispetto a ciò che si vede.
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--cm-bg);
+  color: var(--cm-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}
+
+// Sui dispositivi touch iPadOS genera l'evento click solo sugli elementi "cliccabili":
+// così un tocco in qualunque punto della pagina vale come gesto per sbloccare l'audio
+@media (hover: none) {
+  body {
+    cursor: pointer;
+  }
+}

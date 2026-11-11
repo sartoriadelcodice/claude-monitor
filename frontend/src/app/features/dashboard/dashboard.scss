@@ -1,0 +1,287 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.counter {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--cm-muted);
+
+  .number {
+    font-size: clamp(3rem, 9vw, 5rem);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .caption {
+    font-size: 1.1rem;
+  }
+
+  &.alert .number {
+    color: var(--cm-red);
+  }
+
+  &.alert .caption {
+    color: var(--cm-text);
+  }
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cm-muted);
+  font-size: 0.85rem;
+
+  i {
+    font-size: 0.55rem;
+    color: var(--cm-green);
+  }
+
+  &.offline i {
+    color: var(--cm-orange);
+  }
+}
+
+// Suoni attivi ma audio ancora bloccato dal browser: un puntino avvisa che serve un tocco qualsiasi
+.sound {
+  position: relative;
+  display: inline-flex;
+
+  &.waiting::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cm-orange);
+    pointer-events: none;
+  }
+}
+
+.banners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.grouping {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.grouping-label {
+  color: var(--cm-muted);
+  font-size: 0.85rem;
+}
+
+.group + .group {
+  margin-top: 24px;
+}
+
+.group-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--cm-surface-2);
+  color: var(--cm-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+
+  &.alert {
+    background: color-mix(in srgb, var(--cm-red) 22%, transparent);
+    color: var(--cm-red);
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 150px;
+  padding: 16px;
+  text-align: left;
+  font: inherit;
+  color: var(--cm-text);
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-border);
+  border-left: 6px solid var(--status);
+  border-radius: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:active {
+    background: var(--cm-surface-2);
+  }
+
+  &.highlight {
+    background: color-mix(in srgb, var(--status) 16%, var(--cm-surface));
+    border-color: var(--status);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  &.dim {
+    opacity: 0.55;
+  }
+
+  // Ingrandimento temporaneo: testi più grandi e, dove c'è spazio per due colonne, card doppia
+  &.zoomed {
+    padding: 22px;
+    gap: 10px;
+
+    .status {
+      font-size: 1.05rem;
+    }
+
+    .project {
+      font-size: 2.1rem;
+      line-height: 1.15;
+    }
+
+    .title {
+      font-size: 1.4rem;
+    }
+
+    .meta,
+    .since {
+      font-size: 1.05rem;
+    }
+
+    .message {
+      -webkit-line-clamp: 6;
+      font-size: 1.3rem;
+    }
+
+    @media (min-width: 600px) {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+  }
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--status);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status);
+}
+
+.project {
+  font-size: 1.3rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--cm-muted);
+  font-size: 0.9rem;
+}
+
+.model {
+  padding: 1px 8px;
+  border: 1px solid var(--cm-border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.message {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.95rem;
+}
+
+.since {
+  margin-top: auto;
+  padding-top: 6px;
+  color: var(--cm-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--cm-muted);
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--status) 35%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.highlight {
+    animation: none;
+  }
+}

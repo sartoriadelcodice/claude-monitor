@@ -1,0 +1,118 @@
+<header class="top">
+  <div class="counter" [class.alert]="store.attentionCount() > 0" aria-live="polite">
+    <span class="number">{{ store.attentionCount() }}</span>
+    <span class="caption">
+      {{ store.attentionCount() === 1 ? 'sessione ti aspetta' : 'sessioni ti aspettano' }}
+    </span>
+  </div>
+
+  <div class="tools">
+    <span class="connection" [class.offline]="!store.connected()">
+      <i class="pi pi-circle-fill"></i>
+      {{ store.connected() ? 'In tempo reale' : 'Riconnessione…' }}
+    </span>
+    @if (machines().length > 1) {
+      <p-select [options]="machines()" [ngModel]="machine()" (ngModelChange)="machine.set($event)"
+                placeholder="Tutte le macchine" [showClear]="true" />
+    }
+    <span class="sound" [class.waiting]="audio.waitingForGesture()">
+      <p-button [icon]="audio.enabled() ? 'pi pi-volume-up' : 'pi pi-volume-off'"
+                [severity]="audio.enabled() ? 'success' : 'secondary'" [rounded]="true"
+                [outlined]="audio.enabled()"
+                [ariaLabel]="audio.enabled() ? 'Suoni attivi: tocca per mutare' : 'Suoni mutati: tocca per riattivare'"
+                (onClick)="audio.toggle()" />
+    </span>
+    <p-button [icon]="darkTheme() ? 'pi pi-sun' : 'pi pi-moon'" severity="secondary" [rounded]="true"
+              [ariaLabel]="darkTheme() ? 'Passa al tema chiaro' : 'Passa al tema scuro'"
+              (onClick)="settingsService.toggleTheme()" />
+    <p-button icon="pi pi-key" severity="secondary" [rounded]="true" ariaLabel="Chiavi hook"
+              (onClick)="hookKeysOpen.set(true)" />
+    @if (auth.isAdmin()) {
+      <p-button icon="pi pi-users" severity="secondary" [rounded]="true" ariaLabel="Utenti"
+                (onClick)="usersOpen.set(true)" />
+    }
+    <p-button icon="pi pi-cog" severity="secondary" [rounded]="true" ariaLabel="Impostazioni"
+              (onClick)="settingsOpen.set(true)" />
+  </div>
+</header>
+
+@if (audio.neverChosen() || push.state() === 'default') {
+  <div class="banners">
+    @if (audio.neverChosen()) {
+      <p-button label="Attiva suoni" icon="pi pi-volume-up" (onClick)="audio.enable()" />
+    }
+    @if (push.state() === 'default') {
+      <p-button label="Attiva notifiche" icon="pi pi-bell" severity="secondary" (onClick)="push.enable()" />
+    }
+  </div>
+}
+
+<div class="grouping">
+  <span class="grouping-label">Raggruppa per</span>
+  <p-selectbutton [options]="groupOptions" optionLabel="label" optionValue="value" [allowEmpty]="false"
+                  [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)" size="small" />
+</div>
+
+<main>
+  @for (group of groups(); track group.key) {
+    <section class="group">
+      @if (group.label) {
+        <h2 class="group-title">
+          {{ group.label }}
+          <span class="count">{{ group.sessions.length }}</span>
+          @if (group.attention > 0) {
+            <span class="count alert">{{ group.attention }} in attesa</span>
+          }
+        </h2>
+      }
+      <div class="grid">
+        @for (session of group.sessions; track session.id) {
+          <button type="button" class="card" [class.highlight]="highlighted(session)" [class.zoomed]="zoomed(session)"
+                  [class.dim]="session.archived || session.status === 'ENDED'"
+                  [style.--status]="meta(session).color" (click)="open(session)">
+            <span class="status">
+              <span class="dot"></span>
+              {{ meta(session).label }}
+            </span>
+            <span class="project">{{ session.project }}</span>
+            @if (session.title) {
+              <span class="title">{{ session.title }}</span>
+            }
+            <span class="meta">
+              <span><i class="pi pi-desktop"></i> {{ session.machine }}</span>
+              @if (model(session); as modelName) {
+                <span class="model">{{ modelName }}</span>
+              }
+            </span>
+            @if (session.lastNotificationMessage) {
+              <span class="message">{{ session.lastNotificationMessage }}</span>
+            }
+            <span class="since">da {{ elapsed(session) }}</span>
+          </button>
+        }
+      </div>
+    </section>
+  }
+  @if (visible().length === 0) {
+    <p class="empty">
+      Nessuna sessione Claude Code attiva.
+      <br />
+      Per collegare una macchina crea una chiave hook con il pulsante
+      <i class="pi pi-key"></i>
+      in alto.
+    </p>
+  }
+</main>
+
+@if (selected(); as session) {
+  <app-session-detail [session]="session" (closed)="selectedId.set(null)" />
+}
+@if (hookKeysOpen()) {
+  <app-hook-keys (closed)="hookKeysOpen.set(false)" />
+}
+@if (usersOpen()) {
+  <app-users (closed)="usersOpen.set(false)" />
+}
+@if (settingsOpen()) {
+  <app-settings (closed)="settingsOpen.set(false)" />
+}
