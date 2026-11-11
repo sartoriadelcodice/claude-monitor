@@ -11,7 +11,7 @@ ARG PRIMENG_LICENSE=""
 RUN PRIMENG_LICENSE="$PRIMENG_LICENSE" npm run build
 
 # Runtime
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /build/frontend/dist/frontend/browser /usr/share/nginx/html
 EXPOSE 80
