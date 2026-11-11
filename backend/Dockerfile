@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn -q -B package -DskipTests
 
 # Runtime
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 RUN useradd --system --no-create-home app
 COPY --from=build /build/target/claude-monitor.jar app.jar
